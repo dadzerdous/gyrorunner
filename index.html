@@ -3,22 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Vampire Shockwave</title>
+    <title>Vampire Progression</title>
     <style>
         body { margin: 0; background: #050208; overflow: hidden; color: #e0e0e0; font-family: sans-serif; touch-action: none; }
         canvas { display: block; }
-        #ui { position: absolute; top: 20px; width: 100%; text-align: center; pointer-events: none; }
-        .hud { font-size: 24px; font-weight: bold; color: #ff3333; text-shadow: 2px 2px 4px #000; }
+        #ui { position: absolute; top: 10px; width: 100%; text-align: center; pointer-events: none; }
+        .hud { font-size: 18px; font-weight: bold; color: #ff3333; text-shadow: 2px 2px 4px #000; margin-bottom: 5px; }
+        #xp-container { width: 60%; height: 8px; background: #222; margin: 0 auto; border: 1px solid #444; border-radius: 4px; overflow: hidden; }
+        #xp-bar { width: 0%; height: 100%; background: #00ffcc; transition: width 0.3s; }
+        #cooldown-container { width: 40%; height: 4px; background: #222; margin: 5px auto; border-radius: 2px; }
+        #cooldown-bar { width: 100%; height: 100%; background: #ffaa00; }
         #game-over { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.9); padding: 20px; border: 2px solid red; display: none; text-align: center; pointer-events: all; }
     </style>
 </head>
 <body>
     <div id="ui">
-        <div class="hud">HP: <span id="hp">🩸🩸🩸</span> | KILLS: <span id="kills">0</span></div>
+        <div class="hud">HP: <span id="hp">🩸🩸🩸</span> | LVL: <span id="lvl">1</span></div>
+        <div id="xp-container"><div id="xp-bar"></div></div>
+        <div id="cooldown-container"><div id="cooldown-bar"></div></div>
+        <div style="font-size: 10px; color: #ffaa00;">JUMP READY</div>
     </div>
     <div id="game-over">
-        <h1>WASTED</h1>
-        <button onclick="location.reload()" style="padding: 10px 20px; cursor: pointer;">REBIRTH</button>
+        <h1>STAKED</h1>
+        <button onclick="location.reload()" style="padding: 10px 20px; cursor: pointer;">RESURRECT</button>
     </div>
     <canvas id="gameCanvas"></canvas>
 
@@ -28,59 +35,54 @@ const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-let kills = 0;
-let hp = 3;
+// Stats
+let hp = 3, kills = 0, level = 1, xp = 0, xpNeeded = 5;
 let invulnTimer = 0;
-let worldRotation = 0;
-let targetRotation = 0;
+let worldRotation = 0, targetRotation = 0;
 const scrollSpeed = 4.5;
 const playerPos = { x: canvas.width / 2, y: canvas.height / 2 };
 
-// Jump/Shockwave Logic
-let isJumping = false;
-let jumpTime = 0;
-let shockwaves = [];
+// Jump Cooldown (3 seconds at 60fps = 180)
+let isJumping = false, jumpTime = 0, jumpCooldown = 0;
+const JUMP_MAX_COOLDOWN = 180;
 
-let lastShotTime = 0;
-const fireRate = 1200;
-let enemies = [];
-let bullets = [];
+let enemies = [], bullets = [], shockwaves = [], gems = [];
 const gridSize = 128;
 let worldX = 0, worldY = 0;
+let lastShotTime = 0;
+const fireRate = 1200;
 
-// Inputs
-let touchStartY = 0;
-let touchStartX = 0;
-
-window.addEventListener('touchstart', e => {
-    touchStartX = e.touches[0].clientX;
-    touchStartY = e.touches[0].clientY;
-});
-
+// Input logic
+let touchStartX = 0, touchStartY = 0;
+window.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY; });
 window.addEventListener('touchend', e => {
-    let diffX = e.changedTouches[0].clientX - touchStartX;
-    let diffY = e.changedTouches[0].clientY - touchStartY;
-
-    if (Math.abs(diffY) > 60 && diffY < 0 && !isJumping) {
-        startJump(); // Swipe Up
-    } else if (Math.abs(diffX) > 40) {
-        targetRotation += (diffX > 0 ? 1 : -1) * (95 * Math.PI / 180);
-    }
+    let dx = e.changedTouches[0].clientX - touchStartX;
+    let dy = e.changedTouches[0].clientY - touchStartY;
+    if (dy < -60 && Math.abs(dx) < 40) startJump();
+    else if (Math.abs(dx) > 40) targetRotation += (dx > 0 ? 1 : -1) * (95 * Math.PI / 180);
 });
-
 window.addEventListener('keydown', e => {
     if (e.key === "ArrowLeft") targetRotation -= (95 * Math.PI / 180);
     if (e.key === "ArrowRight") targetRotation += (95 * Math.PI / 180);
-    if (e.code === "Space" && !isJumping) startJump();
+    if (e.code === "Space") startJump();
 });
 
 function startJump() {
+    if (isJumping || jumpCooldown > 0) return;
     isJumping = true;
-    jumpTime = 40; // frames
+    jumpTime = 40;
+    jumpCooldown = JUMP_MAX_COOLDOWN;
 }
 
-function triggerShockwave() {
-    shockwaves.push({ r: 10, maxR: 200, opacity: 1 });
+function gainXP() {
+    xp++;
+    if (xp >= xpNeeded) {
+        level++;
+        xp = 0;
+        xpNeeded += 5;
+        document.getElementById('lvl').innerText = level;
+    }
+    document.getElementById('xp-bar').style.width = (xp / xpNeeded * 100) + "%";
 }
 
 class Enemy {
@@ -89,21 +91,15 @@ class Enemy {
         const dist = Math.max(canvas.width, canvas.height);
         this.x = Math.cos(angle) * dist;
         this.y = Math.sin(angle) * dist;
-        this.speed = 2.0 + Math.random();
+        this.speed = 1.8 + Math.random();
     }
     update(vx, vy) {
         this.x += vx; this.y += vy;
-        const dx = 0 - this.x; const dy = 0 - this.y;
+        const dx = -this.x, dy = -this.y;
         const d = Math.hypot(dx, dy);
-        if (d > 5) {
-            this.x += (dx / d) * this.speed;
-            this.y += (dy / d) * this.speed;
-        }
-
-        // Collision with player
+        if (d > 5) { this.x += (dx / d) * this.speed; this.y += (dy / d) * this.speed; }
         if (d < 30 && invulnTimer <= 0 && !isJumping) {
-            hp--;
-            invulnTimer = 60;
+            hp--; invulnTimer = 60;
             document.getElementById('hp').innerText = "🩸".repeat(hp);
             if (hp <= 0) document.getElementById('game-over').style.display = 'block';
         }
@@ -113,59 +109,68 @@ class Enemy {
 function update(currentTime) {
     if (hp <= 0) return;
     if (invulnTimer > 0) invulnTimer--;
+    if (jumpCooldown > 0) {
+        jumpCooldown--;
+        document.getElementById('cooldown-bar').style.width = ((JUMP_MAX_COOLDOWN - jumpCooldown) / JUMP_MAX_COOLDOWN * 100) + "%";
+    }
 
     worldRotation += (targetRotation - worldRotation) * 0.08;
     const vx = Math.sin(worldRotation) * scrollSpeed;
     const vy = -Math.cos(worldRotation) * scrollSpeed;
     worldX += vx; worldY += vy;
 
-    // Jump handling
     if (isJumping) {
         jumpTime--;
         if (jumpTime === 0) {
             isJumping = false;
-            triggerShockwave();
+            shockwaves.push({ r: 10, opacity: 1 });
         }
     }
 
-    // Shockwave damage
+    // Process Shockwaves
     shockwaves.forEach((sw, si) => {
-        sw.r += 8;
-        sw.opacity -= 0.02;
+        sw.r += 10; sw.opacity -= 0.03;
         if (sw.opacity <= 0) shockwaves.splice(si, 1);
-        
         enemies.forEach((en, ei) => {
-            let d = Math.hypot(en.x, en.y);
-            if (Math.abs(d - sw.r) < 20) {
+            if (Math.abs(Math.hypot(en.x, en.y) - sw.r) < 30) {
+                gems.push({ x: en.x, y: en.y });
                 enemies.splice(ei, 1);
-                kills++;
-                document.getElementById('kills').innerText = kills;
             }
         });
     });
 
-    if (Math.random() < 0.03 && enemies.length < 25) enemies.push(new Enemy());
+    // Process Enemies
+    if (Math.random() < 0.04 && enemies.length < 20) enemies.push(new Enemy());
     enemies.forEach((en, i) => en.update(vx, vy));
 
-    // Shooting logic
+    // Process Gems (XP)
+    gems.forEach((gem, gi) => {
+        gem.x += vx; gem.y += vy; // Drift with world
+        const d = Math.hypot(gem.x, gem.y);
+        if (d < 150) { // Magnet effect
+            gem.x += (-gem.x / d) * 8;
+            gem.y += (-gem.y / d) * 8;
+        }
+        if (d < 20) { gems.splice(gi, 1); gainXP(); }
+    });
+
+    // Shooting
     if (currentTime - lastShotTime > fireRate && enemies.length > 0) {
         let nearest = enemies.reduce((a, b) => Math.hypot(a.x, a.y) < Math.hypot(b.x, b.y) ? a : b);
         let d = Math.hypot(nearest.x, nearest.y);
-        if (d < 600) {
+        if (d < 500) {
             bullets.push({ x: 0, y: 0, vx: (nearest.x / d) * 14, vy: (nearest.y / d) * 14 });
             lastShotTime = currentTime;
         }
     }
 
     bullets.forEach((b, i) => {
-        b.x += b.vx + vx * 0.4;
-        b.y += b.vy + vy * 0.4;
+        b.x += b.vx + vx * 0.4; b.y += b.vy + vy * 0.4;
         enemies.forEach((en, ei) => {
             if (Math.hypot(b.x - en.x, b.y - en.y) < 35) {
+                gems.push({ x: en.x, y: en.y });
                 enemies.splice(ei, 1);
                 bullets.splice(i, 1);
-                kills++;
-                document.getElementById('kills').innerText = kills;
             }
         });
     });
@@ -175,11 +180,10 @@ function draw(currentTime) {
     update(currentTime);
     ctx.fillStyle = '#0a0510';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-
     ctx.save();
     ctx.translate(playerPos.x, playerPos.y);
 
-    // Background Grid
+    // Background
     ctx.strokeStyle = '#1e133a';
     for (let x = (worldX % gridSize) - canvas.width; x < canvas.width; x += gridSize) {
         ctx.beginPath(); ctx.moveTo(x, -canvas.height); ctx.lineTo(x, canvas.height); ctx.stroke();
@@ -188,29 +192,29 @@ function draw(currentTime) {
         ctx.beginPath(); ctx.moveTo(-canvas.width, y); ctx.lineTo(canvas.width, y); ctx.stroke();
     }
 
+    // Gems
+    ctx.font = "16px serif";
+    gems.forEach(gem => ctx.fillText("💎", gem.x - 8, gem.y + 8));
+
     // Shockwaves
     shockwaves.forEach(sw => {
-        ctx.strokeStyle = `rgba(255, 0, 0, ${sw.opacity})`;
-        ctx.lineWidth = 5;
+        ctx.strokeStyle = `rgba(0, 255, 200, ${sw.opacity})`;
+        ctx.lineWidth = 4;
         ctx.beginPath(); ctx.arc(0, 0, sw.r, 0, Math.PI * 2); ctx.stroke();
     });
 
-    // Enemies
+    // Enemies & Bullets
     ctx.font = "32px serif";
     enemies.forEach(en => ctx.fillText("🧟", en.x - 16, en.y + 16));
-
-    // Bullets
     ctx.fillStyle = '#fff';
-    bullets.forEach(b => {
-        ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI * 2); ctx.fill();
-    });
+    bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI * 2); ctx.fill(); });
 
-    // Player with Jump visual
-    let scale = isJumping ? 1.5 : 1;
+    // Player
+    let scale = isJumping ? 1.6 : 1;
     ctx.font = (50 * scale) + "px serif";
     ctx.textAlign = "center";
-    if (invulnTimer % 10 < 5) { // Flashing effect
-        ctx.shadowBlur = 20; ctx.shadowColor = "red";
+    if (invulnTimer % 10 < 5) {
+        ctx.shadowBlur = 15; ctx.shadowColor = "red";
         ctx.fillText("🧛", 0, 15);
     }
     
