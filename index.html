@@ -3,17 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Vampire Drift - Precision Combat</title>
+    <title>Vampire Shockwave</title>
     <style>
-        body { margin: 0; background: #050208; overflow: hidden; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; touch-action: none; }
+        body { margin: 0; background: #050208; overflow: hidden; color: #e0e0e0; font-family: sans-serif; touch-action: none; }
         canvas { display: block; }
         #ui { position: absolute; top: 20px; width: 100%; text-align: center; pointer-events: none; }
-        .hud-text { font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #ff3333; text-shadow: 2px 2px 4px #000; }
+        .hud { font-size: 24px; font-weight: bold; color: #ff3333; text-shadow: 2px 2px 4px #000; }
+        #game-over { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.9); padding: 20px; border: 2px solid red; display: none; text-align: center; pointer-events: all; }
     </style>
 </head>
 <body>
     <div id="ui">
-        <div class="hud-text">KILLS: <span id="kills">0</span></div>
+        <div class="hud">HP: <span id="hp">🩸🩸🩸</span> | KILLS: <span id="kills">0</span></div>
+    </div>
+    <div id="game-over">
+        <h1>WASTED</h1>
+        <button onclick="location.reload()" style="padding: 10px 20px; cursor: pointer;">REBIRTH</button>
     </div>
     <canvas id="gameCanvas"></canvas>
 
@@ -24,32 +29,59 @@ canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
 let kills = 0;
+let hp = 3;
+let invulnTimer = 0;
 let worldRotation = 0;
 let targetRotation = 0;
 const scrollSpeed = 4.5;
 const playerPos = { x: canvas.width / 2, y: canvas.height / 2 };
 
-// Combat Balancing
-let lastShotTime = 0;
-const fireRate = 1200; // Shoot once every 1.2 seconds
+// Jump/Shockwave Logic
+let isJumping = false;
+let jumpTime = 0;
+let shockwaves = [];
 
+let lastShotTime = 0;
+const fireRate = 1200;
 let enemies = [];
 let bullets = [];
 const gridSize = 128;
-let worldX = 0;
-let worldY = 0;
+let worldX = 0, worldY = 0;
 
 // Inputs
-let touchStart = 0;
-window.addEventListener('touchstart', e => touchStart = e.touches[0].clientX);
-window.addEventListener('touchend', e => {
-    let diff = e.changedTouches[0].clientX - touchStart;
-    if (Math.abs(diff) > 40) targetRotation += (diff > 0 ? 1 : -1) * (95 * Math.PI / 180);
+let touchStartY = 0;
+let touchStartX = 0;
+
+window.addEventListener('touchstart', e => {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
 });
+
+window.addEventListener('touchend', e => {
+    let diffX = e.changedTouches[0].clientX - touchStartX;
+    let diffY = e.changedTouches[0].clientY - touchStartY;
+
+    if (Math.abs(diffY) > 60 && diffY < 0 && !isJumping) {
+        startJump(); // Swipe Up
+    } else if (Math.abs(diffX) > 40) {
+        targetRotation += (diffX > 0 ? 1 : -1) * (95 * Math.PI / 180);
+    }
+});
+
 window.addEventListener('keydown', e => {
     if (e.key === "ArrowLeft") targetRotation -= (95 * Math.PI / 180);
     if (e.key === "ArrowRight") targetRotation += (95 * Math.PI / 180);
+    if (e.code === "Space" && !isJumping) startJump();
 });
+
+function startJump() {
+    isJumping = true;
+    jumpTime = 40; // frames
+}
+
+function triggerShockwave() {
+    shockwaves.push({ r: 10, maxR: 200, opacity: 1 });
+}
 
 class Enemy {
     constructor() {
@@ -60,73 +92,83 @@ class Enemy {
         this.speed = 2.0 + Math.random();
     }
     update(vx, vy) {
-        this.x += vx;
-        this.y += vy;
-        const dx = 0 - this.x;
-        const dy = 0 - this.y;
+        this.x += vx; this.y += vy;
+        const dx = 0 - this.x; const dy = 0 - this.y;
         const d = Math.hypot(dx, dy);
         if (d > 5) {
             this.x += (dx / d) * this.speed;
             this.y += (dy / d) * this.speed;
         }
+
+        // Collision with player
+        if (d < 30 && invulnTimer <= 0 && !isJumping) {
+            hp--;
+            invulnTimer = 60;
+            document.getElementById('hp').innerText = "🩸".repeat(hp);
+            if (hp <= 0) document.getElementById('game-over').style.display = 'block';
+        }
     }
 }
 
 function update(currentTime) {
+    if (hp <= 0) return;
+    if (invulnTimer > 0) invulnTimer--;
+
     worldRotation += (targetRotation - worldRotation) * 0.08;
     const vx = Math.sin(worldRotation) * scrollSpeed;
     const vy = -Math.cos(worldRotation) * scrollSpeed;
-    worldX += vx;
-    worldY += vy;
+    worldX += vx; worldY += vy;
 
-    // Spawn enemies
-    if (Math.random() < 0.03 && enemies.length < 25) enemies.push(new Enemy());
-    enemies.forEach((en, i) => {
-        en.update(vx, vy);
-        if (Math.hypot(en.x, en.y) > 1500) enemies.splice(i, 1);
+    // Jump handling
+    if (isJumping) {
+        jumpTime--;
+        if (jumpTime === 0) {
+            isJumping = false;
+            triggerShockwave();
+        }
+    }
+
+    // Shockwave damage
+    shockwaves.forEach((sw, si) => {
+        sw.r += 8;
+        sw.opacity -= 0.02;
+        if (sw.opacity <= 0) shockwaves.splice(si, 1);
+        
+        enemies.forEach((en, ei) => {
+            let d = Math.hypot(en.x, en.y);
+            if (Math.abs(d - sw.r) < 20) {
+                enemies.splice(ei, 1);
+                kills++;
+                document.getElementById('kills').innerText = kills;
+            }
+        });
     });
 
-    // Precision Auto-Shoot
+    if (Math.random() < 0.03 && enemies.length < 25) enemies.push(new Enemy());
+    enemies.forEach((en, i) => en.update(vx, vy));
+
+    // Shooting logic
     if (currentTime - lastShotTime > fireRate && enemies.length > 0) {
         let nearest = enemies.reduce((a, b) => Math.hypot(a.x, a.y) < Math.hypot(b.x, b.y) ? a : b);
         let d = Math.hypot(nearest.x, nearest.y);
-        
-        // Shoot if within a reasonable range
         if (d < 600) {
-            bullets.push({
-                x: 0, y: 0,
-                vx: (nearest.x / d) * 14, // Faster bullet travel
-                vy: (nearest.y / d) * 14
-            });
+            bullets.push({ x: 0, y: 0, vx: (nearest.x / d) * 14, vy: (nearest.y / d) * 14 });
             lastShotTime = currentTime;
         }
     }
 
-    // Bullet Physics and Collision
-    for (let i = bullets.length - 1; i >= 0; i--) {
-        let b = bullets[i];
-        b.x += b.vx;
-        b.y += b.vy;
-        // Subtle drift movement
-        b.x += vx * 0.4;
-        b.y += vy * 0.4;
-
-        let hit = false;
-        for (let j = enemies.length - 1; j >= 0; j--) {
-            let en = enemies[j];
+    bullets.forEach((b, i) => {
+        b.x += b.vx + vx * 0.4;
+        b.y += b.vy + vy * 0.4;
+        enemies.forEach((en, ei) => {
             if (Math.hypot(b.x - en.x, b.y - en.y) < 35) {
-                enemies.splice(j, 1); // Remove enemy
-                hit = true;
+                enemies.splice(ei, 1);
+                bullets.splice(i, 1);
                 kills++;
                 document.getElementById('kills').innerText = kills;
-                break; // Stop checking enemies for this bullet
             }
-        }
-
-        if (hit || Math.hypot(b.x, b.y) > 1000) {
-            bullets.splice(i, 1); // Remove bullet on hit or range limit
-        }
-    }
+        });
+    });
 }
 
 function draw(currentTime) {
@@ -137,46 +179,44 @@ function draw(currentTime) {
     ctx.save();
     ctx.translate(playerPos.x, playerPos.y);
 
-    // Grid
+    // Background Grid
     ctx.strokeStyle = '#1e133a';
-    ctx.lineWidth = 1;
-    const startX = (worldX % gridSize) - canvas.width;
-    const endX = (worldX % gridSize) + canvas.width;
-    const startY = (worldY % gridSize) - canvas.height;
-    const endY = (worldY % gridSize) + canvas.height;
-
-    for (let x = startX; x < endX; x += gridSize) {
+    for (let x = (worldX % gridSize) - canvas.width; x < canvas.width; x += gridSize) {
         ctx.beginPath(); ctx.moveTo(x, -canvas.height); ctx.lineTo(x, canvas.height); ctx.stroke();
     }
-    for (let y = startY; y < endY; y += gridSize) {
+    for (let y = (worldY % gridSize) - canvas.height; y < canvas.height; y += gridSize) {
         ctx.beginPath(); ctx.moveTo(-canvas.width, y); ctx.lineTo(canvas.width, y); ctx.stroke();
     }
+
+    // Shockwaves
+    shockwaves.forEach(sw => {
+        ctx.strokeStyle = `rgba(255, 0, 0, ${sw.opacity})`;
+        ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.arc(0, 0, sw.r, 0, Math.PI * 2); ctx.stroke();
+    });
 
     // Enemies
     ctx.font = "32px serif";
     enemies.forEach(en => ctx.fillText("🧟", en.x - 16, en.y + 16));
 
     // Bullets
+    ctx.fillStyle = '#fff';
     bullets.forEach(b => {
-        ctx.fillStyle = '#fff';
-        ctx.shadowBlur = 8;
-        ctx.shadowColor = '#0ff';
         ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI * 2); ctx.fill();
-        ctx.shadowBlur = 0;
     });
 
-    // Player
-    ctx.font = "50px serif";
+    // Player with Jump visual
+    let scale = isJumping ? 1.5 : 1;
+    ctx.font = (50 * scale) + "px serif";
     ctx.textAlign = "center";
-    ctx.shadowBlur = 20;
-    ctx.shadowColor = "red";
-    ctx.fillText("🧛", 0, 15);
-    ctx.shadowBlur = 0;
-
+    if (invulnTimer % 10 < 5) { // Flashing effect
+        ctx.shadowBlur = 20; ctx.shadowColor = "red";
+        ctx.fillText("🧛", 0, 15);
+    }
+    
     ctx.restore();
     requestAnimationFrame(draw);
 }
-
 requestAnimationFrame(draw);
 </script>
 </body>
