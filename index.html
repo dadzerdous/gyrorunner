@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Vampire Runner - The River</title>
+    <title>95 Degree Drift Survivor</title>
     <style>
-        body { margin: 0; background: #050505; overflow: hidden; color: white; font-family: sans-serif; touch-action: none; }
+        body { margin: 0; background: #000; overflow: hidden; color: #0f0; font-family: 'Courier New', monospace; touch-action: none; }
         canvas { display: block; }
-        #ui { position: absolute; top: 10px; width: 100%; text-align: center; pointer-events: none; }
+        #ui { position: absolute; top: 10px; width: 100%; text-align: center; pointer-events: none; text-shadow: 2px 2px #000; }
     </style>
 </head>
 <body>
     <div id="ui">
-        <div style="font-size: 20px;">DISTANCE: <span id="dist">0</span>m</div>
-        <div style="color: #f00;">KILLS: <span id="kills">0</span></div>
+        <div style="font-size: 24px;">KILLS: <span id="kills">0</span></div>
+        <div style="font-size: 12px; opacity: 0.7;">SWIPE LEFT/RIGHT TO PIVOT 95°</div>
     </div>
     <canvas id="gameCanvas"></canvas>
 
@@ -23,134 +23,134 @@ const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-// --- Game Logic ---
-let worldXOffset = 0; 
-const scrollSpeed = 6; // This is the "Endless Runner" speed
-let distance = 0;
 let kills = 0;
+let worldRotation = 0; // In radians
+let targetRotation = 0;
+const scrollSpeed = 5;
+const playerPos = { x: canvas.width / 2, y: canvas.height / 2 };
+
 let enemies = [];
 let bullets = [];
+let particles = [];
 
-// --- Input Handling ---
-let touchStartX = 0;
-window.addEventListener('mousedown', e => touchStartX = e.clientX);
-window.addEventListener('mousemove', e => {
-    if (e.buttons === 1) { // If left click is held
-        let diff = e.clientX - touchStartX;
-        worldXOffset -= diff * 1.5; // Moving the world away from the swipe
-        touchStartX = e.clientX;
+// Initialize background stars for movement reference
+for(let i=0; i<80; i++) {
+    particles.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, s: Math.random() * 2 });
+}
+
+// --- Input: Swipe to Snap 95 Degrees ---
+let touchStart = 0;
+window.addEventListener('touchstart', e => touchStart = e.touches[0].clientX);
+window.addEventListener('touchend', e => {
+    let diff = e.changedTouches[0].clientX - touchStart;
+    if (Math.abs(diff) > 50) {
+        // 95 degrees is approx 1.65 radians
+        targetRotation += (diff > 0 ? 1 : -1) * (95 * Math.PI / 180);
     }
 });
-window.addEventListener('touchstart', e => touchStartX = e.touches[0].clientX);
-window.addEventListener('touchmove', e => {
-    let diff = e.touches[0].clientX - touchStartX;
-    worldXOffset -= diff * 1.5;
-    touchStartX = e.touches[0].clientX;
+// Keyboard Fallback
+window.addEventListener('keydown', e => {
+    if (e.key === "ArrowLeft") targetRotation -= (95 * Math.PI / 180);
+    if (e.key === "ArrowRight") targetRotation += (95 * Math.PI / 180);
 });
 
 class Enemy {
     constructor() {
-        // Spawn them far at the top (ahead of the player)
-        this.x = (Math.random() - 0.5) * canvas.width * 2; 
-        this.y = -canvas.height; 
-        this.speed = scrollSpeed + (1 + Math.random() * 3); // Faster than the scroll
-        this.emoji = "🧟";
-    }
-    update() {
-        // 1. The World Scroll (Always moving toward bottom of screen)
-        this.y += scrollSpeed;
-        
-        // 2. The Monster's Chase (Extra speed to catch the player)
-        let dx = (0 - (this.x + worldXOffset)); // 0 is player center
-        let dy = (canvas.height - 150 - this.y); 
-        let dist = Math.hypot(dx, dy);
-        
-        this.x += (dx / dist) * 2;
-        this.y += (dy / dist) * 2;
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 600;
+        this.x = Math.cos(angle) * dist;
+        this.y = Math.sin(angle) * dist;
+        this.hp = 1;
     }
 }
 
-function update(time) {
-    distance += Math.floor(scrollSpeed / 10);
-    document.getElementById('dist').innerText = distance;
+function update() {
+    // Smoothly interpolate to target rotation (the "Pivot")
+    worldRotation += (targetRotation - worldRotation) * 0.1;
 
-    // Manage Enemies
-    if (time % 60 < 1) enemies.push(new Enemy());
+    // Movement Vector (The "Endless" part)
+    // We are always running "Up", so the world moves "Down" relative to our rotation
+    const vx = Math.sin(worldRotation) * scrollSpeed;
+    const vy = -Math.cos(worldRotation) * scrollSpeed;
 
-    enemies.forEach((en, i) => {
-        en.update();
-        
-        // Auto-shoot logic
-        if (time % 30 < 1 && Math.hypot(en.x + worldXOffset, en.y - (canvas.height - 150)) < 400) {
-           // Basic projectile spawn...
-        }
-
-        // Cleanup
-        if (en.y > canvas.height) enemies.splice(i, 1);
+    // Update Particles (World movement)
+    particles.forEach(p => {
+        p.x += vx; p.y += vy;
+        if (p.x < 0) p.x = canvas.width; if (p.x > canvas.width) p.x = 0;
+        if (p.y < 0) p.y = canvas.height; if (p.y > canvas.height) p.y = 0;
     });
 
-    // Simple Auto-Bullet firing at nearest
-    if (time % 40 < 1 && enemies.length > 0) {
-        let nearest = enemies[0];
-        let minDist = Infinity;
-        enemies.forEach(e => {
-            let d = Math.hypot(e.x + worldXOffset, e.y - (canvas.height - 150));
-            if (d < minDist) { minDist = d; nearest = e; }
-        });
-        bullets.push({ 
-            x: 0, 
-            y: canvas.height - 150, 
-            tx: nearest.x + worldXOffset, 
-            ty: nearest.y 
+    // Update Enemies
+    if (Math.random() < 0.03) enemies.push(new Enemy());
+    enemies.forEach((en, i) => {
+        en.x += vx; en.y += vy; // World scroll
+        
+        // Homing: Move toward player (center 0,0)
+        let dx = -en.x; let dy = -en.y;
+        let d = Math.hypot(dx, dy);
+        en.x += (dx/d) * 2.5; 
+        en.y += (dy/d) * 2.5;
+
+        if (d > 1000) enemies.splice(i, 1);
+    });
+
+    // Auto-Shoot nearest
+    if (Date.now() % 500 < 20 && enemies.length > 0) {
+        let nearest = enemies.reduce((a, b) => Math.hypot(a.x, a.y) < Math.hypot(b.x, b.y) ? a : b);
+        let d = Math.hypot(nearest.x, nearest.y);
+        // Bullet takes a snapshot of movement + its own speed
+        bullets.push({
+            x: 0, y: 0,
+            vx: (nearest.x/d) * 10,
+            vy: (nearest.y/d) * 10
         });
     }
 
+    // Update Bullets (Physics independent of world scroll for stability)
     bullets.forEach((b, i) => {
-        let angle = Math.atan2(b.ty - b.y, b.tx - b.x);
-        b.x += Math.cos(angle) * 12;
-        b.y += Math.sin(angle) * 12;
-
+        b.x += b.vx; b.y += b.vy;
         enemies.forEach((en, ei) => {
-            if (Math.hypot(b.x - (en.x + worldXOffset), b.y - en.y) < 30) {
+            if (Math.hypot(b.x - en.x, b.y - en.y) < 25) {
                 enemies.splice(ei, 1);
                 bullets.splice(i, 1);
                 kills++;
                 document.getElementById('kills').innerText = kills;
             }
         });
+        if (Math.hypot(b.x, b.y) > 800) bullets.splice(i, 1);
     });
 }
 
 function draw() {
-    ctx.fillStyle = '#050505';
+    ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw Perspective Lines (Runner feel)
-    ctx.strokeStyle = "#111";
-    for(let i = -10; i < 10; i++) {
-        ctx.beginPath();
-        ctx.moveTo(canvas.width/2 + (i * 200) + worldXOffset, 0);
-        ctx.lineTo(canvas.width/2 + (i * 400) + worldXOffset, canvas.height);
-        ctx.stroke();
-    }
+    ctx.save();
+    ctx.translate(playerPos.x, playerPos.y);
+
+    // Draw reference dots (The World)
+    ctx.fillStyle = "#111";
+    particles.forEach(p => ctx.fillRect(p.x - playerPos.x, p.y - playerPos.y, p.s, p.s));
 
     // Draw Enemies
-    ctx.font = "30px serif";
-    enemies.forEach(en => {
-        ctx.fillText(en.emoji, (canvas.width/2) + en.x + worldXOffset, en.y);
-    });
+    ctx.font = "24px serif";
+    enemies.forEach(en => ctx.fillText("🧟", en.x - 12, en.y + 12));
 
     // Draw Bullets
-    ctx.fillStyle = "yellow";
+    ctx.fillStyle = "#ff0";
     bullets.forEach(b => {
-        ctx.beginPath(); ctx.arc(b.x + canvas.width/2, b.y, 4, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(b.x, b.y, 3, 0, Math.PI*2); ctx.fill();
     });
 
-    // Draw Player (Fixed at bottom)
-    ctx.font = "50px serif";
-    ctx.fillText("🧙", canvas.width/2 - 25, canvas.height - 120);
+    // The Player (Fixed)
+    ctx.font = "40px serif";
+    ctx.textAlign = "center";
+    ctx.fillText("🧛", 0, 15);
 
-    requestAnimationFrame((t) => { update(t); draw(); });
+    ctx.restore();
+    
+    update();
+    requestAnimationFrame(draw);
 }
 
 draw();
