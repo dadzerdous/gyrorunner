@@ -3,17 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>World-Swipe Survivor</title>
+    <title>Vampire Runner - World Shift</title>
     <style>
-        body { margin: 0; background: #111; overflow: hidden; color: white; font-family: sans-serif; touch-action: none; }
+        body { margin: 0; background: #0a0a0a; overflow: hidden; color: white; font-family: 'Courier New', Courier, monospace; touch-action: none; }
         canvas { display: block; }
-        #ui { position: absolute; top: 10px; width: 100%; text-align: center; pointer-events: none; }
+        #ui { position: absolute; top: 20px; width: 100%; text-align: center; pointer-events: none; }
+        .hint { color: #666; font-size: 12px; margin-top: 5px; }
     </style>
 </head>
 <body>
     <div id="ui">
-        <div>Kills: <span id="kills">0</span></div>
-        <small>Swipe to Turn World | Auto-Running UP</small>
+        <div style="font-size: 24px;">KILLS: <span id="kills">0</span></div>
+        <div class="hint">CLICK & DRAG or ARROWS to turn world</div>
     </div>
     <canvas id="gameCanvas"></canvas>
 
@@ -23,126 +24,160 @@ const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-// --- Game State ---
-let worldAngle = 0; // The direction the world is "facing"
-let runSpeed = 2;
+// --- Settings ---
+let worldAngle = 0; // 0 is straight ahead
+let runSpeed = 4;
 let kills = 0;
 const playerPos = { x: canvas.width / 2, y: canvas.height / 2 };
+
+// --- Objects ---
 let enemies = [];
 let bullets = [];
+let groundParticles = [];
 
-// --- Input Handling (Swiping) ---
-let touchStartX = 0;
-window.addEventListener('touchstart', e => touchStartX = e.touches[0].clientX);
-window.addEventListener('touchmove', e => {
-    let diff = e.touches[0].clientX - touchStartX;
-    worldAngle += diff * 0.001; // Sensitivity
+// Create initial ground particles to show motion
+for(let i=0; i<100; i++) {
+    groundParticles.push({
+        x: Math.random() * canvas.width - canvas.width/2,
+        y: Math.random() * canvas.height - canvas.height/2,
+        size: Math.random() * 2
+    });
+}
+
+// --- Input Handling ---
+let isDragging = false;
+let lastX = 0;
+
+window.addEventListener('mousedown', e => { isDragging = true; lastX = e.clientX; });
+window.addEventListener('touchstart', e => { isDragging = true; lastX = e.touches[0].clientX; });
+window.addEventListener('mouseup', () => isDragging = false);
+window.addEventListener('touchend', () => isDragging = false);
+
+window.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    let deltaX = e.clientX - lastX;
+    worldAngle += deltaX * 0.01; // Increased sensitivity
+    lastX = e.clientX;
 });
-// Keyboard Fallback
+
+window.addEventListener('touchmove', e => {
+    if (!isDragging) return;
+    let deltaX = e.touches[0].clientX - lastX;
+    worldAngle += deltaX * 0.02;
+    lastX = e.touches[0].clientX;
+});
+
 const keys = {};
 window.addEventListener('keydown', e => keys[e.code] = true);
 window.addEventListener('keyup', e => keys[e.code] = false);
 
 class Enemy {
     constructor() {
-        // Spawn in a large circle far away from the player
-        const spawnDist = 600;
+        const dist = 800;
         const angle = Math.random() * Math.PI * 2;
-        this.worldX = Math.cos(angle) * spawnDist;
-        this.worldY = Math.sin(angle) * spawnDist;
-        this.emoji = "🧟";
+        this.worldX = Math.cos(angle) * dist;
+        this.worldY = Math.sin(angle) * dist;
     }
 }
 
-function update(time) {
-    // 1. Handle Turning (Rotation)
-    if (keys['ArrowLeft']) worldAngle -= 0.05;
-    if (keys['ArrowRight']) worldAngle += 0.05;
+function update() {
+    // Keyboard turning
+    if (keys['ArrowLeft'] || keys['KeyA']) worldAngle -= 0.05;
+    if (keys['ArrowRight'] || keys['KeyD']) worldAngle += 0.05;
 
-    // 2. The "Endless Run" Logic
-    // We move all enemies based on the current worldAngle and runSpeed
-    // This makes it feel like the player is moving "Up" relative to the screen
-    const moveX = Math.sin(worldAngle) * runSpeed;
-    const moveY = Math.cos(worldAngle) * runSpeed;
+    // Calculate movement vector based on world rotation
+    // We are always running "Forward" (Up on screen), so we shift the world down
+    const driftX = Math.sin(worldAngle) * runSpeed;
+    const driftY = Math.cos(worldAngle) * runSpeed;
 
-    enemies.forEach(en => {
-        // Move enemy towards player (the center 0,0 in world space)
-        const angleToPlayer = Math.atan2(-en.worldY, -en.worldX);
-        en.worldX += Math.cos(angleToPlayer) * 1.2; // Enemy speed
-        en.worldY += Math.sin(angleToPlayer) * 1.2;
+    // Update Ground Particles (Visual feedback of movement)
+    groundParticles.forEach(p => {
+        p.x -= driftX;
+        p.y += driftY;
 
-        // Apply World Scroll (The Run)
-        en.worldX -= moveX;
-        en.worldY += moveY;
+        // Wrap particles around screen for infinite look
+        if (p.x < -canvas.width/2) p.x = canvas.width/2;
+        if (p.x > canvas.width/2) p.x = -canvas.width/2;
+        if (p.y < -canvas.height/2) p.y = canvas.height/2;
+        if (p.y > canvas.height/2) p.y = -canvas.height/2;
     });
 
-    // 3. Auto-Shoot (Targeting closest in world space)
-    if (time % 60 < 1 && enemies.length > 0) {
-        let nearest = enemies[0];
-        let minDist = Infinity;
-        enemies.forEach(en => {
-            let d = Math.hypot(en.worldX, en.worldY);
-            if(d < minDist) { minDist = d; nearest = en; }
-        });
-        bullets.push({ 
-            x: 0, y: 0, 
-            vx: (nearest.worldX / minDist) * 8, 
-            vy: (nearest.worldY / minDist) * 8 
-        });
+    // Update Enemies
+    enemies.forEach((en, i) => {
+        // Move enemy toward player (0,0)
+        const angleToPlayer = Math.atan2(-en.worldY, -en.worldX);
+        en.worldX += Math.cos(angleToPlayer) * 1.5;
+        en.worldY += Math.sin(angleToPlayer) * 1.5;
+
+        // Apply World Drift
+        en.worldX -= driftX;
+        en.worldY += driftY;
+
+        // Cleanup if too far
+        if (Math.hypot(en.worldX, en.worldY) > 1500) enemies.splice(i, 1);
+    });
+
+    // Auto-Shoot
+    if (Math.random() < 0.05 && enemies.length > 0) {
+        let nearest = enemies.reduce((prev, curr) => 
+            Math.hypot(curr.worldX, curr.worldY) < Math.hypot(prev.worldX, prev.worldY) ? curr : prev
+        );
+        let d = Math.hypot(nearest.worldX, nearest.worldY);
+        bullets.push({ x: 0, y: 0, vx: (nearest.worldX/d)*10, vy: (nearest.worldY/d)*10 });
     }
 
-    // Update Bullets
     bullets.forEach((b, i) => {
         b.x += b.vx; b.y += b.vy;
-        // Collision
         enemies.forEach((en, ei) => {
-            if (Math.hypot(b.x - en.worldX, b.y - en.worldY) < 25) {
+            if (Math.hypot(b.x - en.worldX, b.y - en.worldY) < 30) {
                 enemies.splice(ei, 1);
                 bullets.splice(i, 1);
                 kills++;
                 document.getElementById('kills').innerText = kills;
             }
         });
+        if (Math.hypot(b.x, b.y) > 1000) bullets.splice(i, 1);
     });
 
-    if (enemies.length < 20) enemies.push(new Enemy());
+    if (enemies.length < 15) enemies.push(new Enemy());
 }
 
 function draw() {
-    ctx.fillStyle = '#111';
+    ctx.fillStyle = '#0a0a0a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.save();
     ctx.translate(playerPos.x, playerPos.y);
 
-    // Draw Background Grid (To show movement)
-    ctx.strokeStyle = "#222";
-    let gridSize = 100;
-    // Simple visual to show movement:
-    for(let i = -5; i < 5; i++) {
-        ctx.beginPath(); ctx.moveTo(-500, i * gridSize); ctx.lineTo(500, i * gridSize); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(i * gridSize, -500); ctx.lineTo(i * gridSize, 500); ctx.stroke();
-    }
+    // Draw Ground
+    ctx.fillStyle = "#333";
+    groundParticles.forEach(p => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+        ctx.fill();
+    });
 
     // Draw Enemies
     ctx.font = "30px serif";
     enemies.forEach(en => {
-        ctx.fillText(en.emoji, en.worldX - 15, en.worldY + 15);
+        ctx.fillText("🧟", en.worldX - 15, en.worldY + 15);
     });
 
     // Draw Bullets
-    ctx.fillStyle = "cyan";
+    ctx.fillStyle = "#ff0";
     bullets.forEach(b => {
-        ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(b.x, b.y, 3, 0, Math.PI*2); ctx.fill();
     });
 
-    // Draw Fixed Player
-    ctx.font = "40px serif";
-    ctx.fillText("🧙", -20, 15);
+    // Draw Player (Fixed in Center)
+    ctx.font = "50px serif";
+    ctx.textAlign = "center";
+    ctx.fillText("🧙", 0, 15);
 
     ctx.restore();
     
-    requestAnimationFrame((t) => { update(t); draw(); });
+    update();
+    requestAnimationFrame(draw);
 }
 
 draw();
