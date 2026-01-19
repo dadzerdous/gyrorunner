@@ -3,18 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Vampire Runner - World Shift</title>
+    <title>Vampire Runner - The River</title>
     <style>
-        body { margin: 0; background: #0a0a0a; overflow: hidden; color: white; font-family: 'Courier New', Courier, monospace; touch-action: none; }
+        body { margin: 0; background: #050505; overflow: hidden; color: white; font-family: sans-serif; touch-action: none; }
         canvas { display: block; }
-        #ui { position: absolute; top: 20px; width: 100%; text-align: center; pointer-events: none; }
-        .hint { color: #666; font-size: 12px; margin-top: 5px; }
+        #ui { position: absolute; top: 10px; width: 100%; text-align: center; pointer-events: none; }
     </style>
 </head>
 <body>
     <div id="ui">
-        <div style="font-size: 24px;">KILLS: <span id="kills">0</span></div>
-        <div class="hint">CLICK & DRAG or ARROWS to turn world</div>
+        <div style="font-size: 20px;">DISTANCE: <span id="dist">0</span>m</div>
+        <div style="color: #f00;">KILLS: <span id="kills">0</span></div>
     </div>
     <canvas id="gameCanvas"></canvas>
 
@@ -24,160 +23,134 @@ const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-// --- Settings ---
-let worldAngle = 0; // 0 is straight ahead
-let runSpeed = 4;
+// --- Game Logic ---
+let worldXOffset = 0; 
+const scrollSpeed = 6; // This is the "Endless Runner" speed
+let distance = 0;
 let kills = 0;
-const playerPos = { x: canvas.width / 2, y: canvas.height / 2 };
-
-// --- Objects ---
 let enemies = [];
 let bullets = [];
-let groundParticles = [];
-
-// Create initial ground particles to show motion
-for(let i=0; i<100; i++) {
-    groundParticles.push({
-        x: Math.random() * canvas.width - canvas.width/2,
-        y: Math.random() * canvas.height - canvas.height/2,
-        size: Math.random() * 2
-    });
-}
 
 // --- Input Handling ---
-let isDragging = false;
-let lastX = 0;
-
-window.addEventListener('mousedown', e => { isDragging = true; lastX = e.clientX; });
-window.addEventListener('touchstart', e => { isDragging = true; lastX = e.touches[0].clientX; });
-window.addEventListener('mouseup', () => isDragging = false);
-window.addEventListener('touchend', () => isDragging = false);
-
+let touchStartX = 0;
+window.addEventListener('mousedown', e => touchStartX = e.clientX);
 window.addEventListener('mousemove', e => {
-    if (!isDragging) return;
-    let deltaX = e.clientX - lastX;
-    worldAngle += deltaX * 0.01; // Increased sensitivity
-    lastX = e.clientX;
+    if (e.buttons === 1) { // If left click is held
+        let diff = e.clientX - touchStartX;
+        worldXOffset -= diff * 1.5; // Moving the world away from the swipe
+        touchStartX = e.clientX;
+    }
 });
-
+window.addEventListener('touchstart', e => touchStartX = e.touches[0].clientX);
 window.addEventListener('touchmove', e => {
-    if (!isDragging) return;
-    let deltaX = e.touches[0].clientX - lastX;
-    worldAngle += deltaX * 0.02;
-    lastX = e.touches[0].clientX;
+    let diff = e.touches[0].clientX - touchStartX;
+    worldXOffset -= diff * 1.5;
+    touchStartX = e.touches[0].clientX;
 });
-
-const keys = {};
-window.addEventListener('keydown', e => keys[e.code] = true);
-window.addEventListener('keyup', e => keys[e.code] = false);
 
 class Enemy {
     constructor() {
-        const dist = 800;
-        const angle = Math.random() * Math.PI * 2;
-        this.worldX = Math.cos(angle) * dist;
-        this.worldY = Math.sin(angle) * dist;
+        // Spawn them far at the top (ahead of the player)
+        this.x = (Math.random() - 0.5) * canvas.width * 2; 
+        this.y = -canvas.height; 
+        this.speed = scrollSpeed + (1 + Math.random() * 3); // Faster than the scroll
+        this.emoji = "🧟";
+    }
+    update() {
+        // 1. The World Scroll (Always moving toward bottom of screen)
+        this.y += scrollSpeed;
+        
+        // 2. The Monster's Chase (Extra speed to catch the player)
+        let dx = (0 - (this.x + worldXOffset)); // 0 is player center
+        let dy = (canvas.height - 150 - this.y); 
+        let dist = Math.hypot(dx, dy);
+        
+        this.x += (dx / dist) * 2;
+        this.y += (dy / dist) * 2;
     }
 }
 
-function update() {
-    // Keyboard turning
-    if (keys['ArrowLeft'] || keys['KeyA']) worldAngle -= 0.05;
-    if (keys['ArrowRight'] || keys['KeyD']) worldAngle += 0.05;
+function update(time) {
+    distance += Math.floor(scrollSpeed / 10);
+    document.getElementById('dist').innerText = distance;
 
-    // Calculate movement vector based on world rotation
-    // We are always running "Forward" (Up on screen), so we shift the world down
-    const driftX = Math.sin(worldAngle) * runSpeed;
-    const driftY = Math.cos(worldAngle) * runSpeed;
+    // Manage Enemies
+    if (time % 60 < 1) enemies.push(new Enemy());
 
-    // Update Ground Particles (Visual feedback of movement)
-    groundParticles.forEach(p => {
-        p.x -= driftX;
-        p.y += driftY;
-
-        // Wrap particles around screen for infinite look
-        if (p.x < -canvas.width/2) p.x = canvas.width/2;
-        if (p.x > canvas.width/2) p.x = -canvas.width/2;
-        if (p.y < -canvas.height/2) p.y = canvas.height/2;
-        if (p.y > canvas.height/2) p.y = -canvas.height/2;
-    });
-
-    // Update Enemies
     enemies.forEach((en, i) => {
-        // Move enemy toward player (0,0)
-        const angleToPlayer = Math.atan2(-en.worldY, -en.worldX);
-        en.worldX += Math.cos(angleToPlayer) * 1.5;
-        en.worldY += Math.sin(angleToPlayer) * 1.5;
+        en.update();
+        
+        // Auto-shoot logic
+        if (time % 30 < 1 && Math.hypot(en.x + worldXOffset, en.y - (canvas.height - 150)) < 400) {
+           // Basic projectile spawn...
+        }
 
-        // Apply World Drift
-        en.worldX -= driftX;
-        en.worldY += driftY;
-
-        // Cleanup if too far
-        if (Math.hypot(en.worldX, en.worldY) > 1500) enemies.splice(i, 1);
+        // Cleanup
+        if (en.y > canvas.height) enemies.splice(i, 1);
     });
 
-    // Auto-Shoot
-    if (Math.random() < 0.05 && enemies.length > 0) {
-        let nearest = enemies.reduce((prev, curr) => 
-            Math.hypot(curr.worldX, curr.worldY) < Math.hypot(prev.worldX, prev.worldY) ? curr : prev
-        );
-        let d = Math.hypot(nearest.worldX, nearest.worldY);
-        bullets.push({ x: 0, y: 0, vx: (nearest.worldX/d)*10, vy: (nearest.worldY/d)*10 });
+    // Simple Auto-Bullet firing at nearest
+    if (time % 40 < 1 && enemies.length > 0) {
+        let nearest = enemies[0];
+        let minDist = Infinity;
+        enemies.forEach(e => {
+            let d = Math.hypot(e.x + worldXOffset, e.y - (canvas.height - 150));
+            if (d < minDist) { minDist = d; nearest = e; }
+        });
+        bullets.push({ 
+            x: 0, 
+            y: canvas.height - 150, 
+            tx: nearest.x + worldXOffset, 
+            ty: nearest.y 
+        });
     }
 
     bullets.forEach((b, i) => {
-        b.x += b.vx; b.y += b.vy;
+        let angle = Math.atan2(b.ty - b.y, b.tx - b.x);
+        b.x += Math.cos(angle) * 12;
+        b.y += Math.sin(angle) * 12;
+
         enemies.forEach((en, ei) => {
-            if (Math.hypot(b.x - en.worldX, b.y - en.worldY) < 30) {
+            if (Math.hypot(b.x - (en.x + worldXOffset), b.y - en.y) < 30) {
                 enemies.splice(ei, 1);
                 bullets.splice(i, 1);
                 kills++;
                 document.getElementById('kills').innerText = kills;
             }
         });
-        if (Math.hypot(b.x, b.y) > 1000) bullets.splice(i, 1);
     });
-
-    if (enemies.length < 15) enemies.push(new Enemy());
 }
 
 function draw() {
-    ctx.fillStyle = '#0a0a0a';
+    ctx.fillStyle = '#050505';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    ctx.save();
-    ctx.translate(playerPos.x, playerPos.y);
-
-    // Draw Ground
-    ctx.fillStyle = "#333";
-    groundParticles.forEach(p => {
+    // Draw Perspective Lines (Runner feel)
+    ctx.strokeStyle = "#111";
+    for(let i = -10; i < 10; i++) {
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
-        ctx.fill();
-    });
+        ctx.moveTo(canvas.width/2 + (i * 200) + worldXOffset, 0);
+        ctx.lineTo(canvas.width/2 + (i * 400) + worldXOffset, canvas.height);
+        ctx.stroke();
+    }
 
     // Draw Enemies
     ctx.font = "30px serif";
     enemies.forEach(en => {
-        ctx.fillText("🧟", en.worldX - 15, en.worldY + 15);
+        ctx.fillText(en.emoji, (canvas.width/2) + en.x + worldXOffset, en.y);
     });
 
     // Draw Bullets
-    ctx.fillStyle = "#ff0";
+    ctx.fillStyle = "yellow";
     bullets.forEach(b => {
-        ctx.beginPath(); ctx.arc(b.x, b.y, 3, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(b.x + canvas.width/2, b.y, 4, 0, Math.PI*2); ctx.fill();
     });
 
-    // Draw Player (Fixed in Center)
+    // Draw Player (Fixed at bottom)
     ctx.font = "50px serif";
-    ctx.textAlign = "center";
-    ctx.fillText("🧙", 0, 15);
+    ctx.fillText("🧙", canvas.width/2 - 25, canvas.height - 120);
 
-    ctx.restore();
-    
-    update();
-    requestAnimationFrame(draw);
+    requestAnimationFrame((t) => { update(t); draw(); });
 }
 
 draw();
