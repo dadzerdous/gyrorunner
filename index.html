@@ -3,27 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Vampire Arena</title>
+    <title>Vampire Arena - Joystick</title>
     <style>
         body { margin: 0; background: #050208; overflow: hidden; color: #e0e0e0; font-family: sans-serif; touch-action: none; }
         canvas { display: block; }
         #ui { position: absolute; top: 10px; width: 100%; text-align: center; pointer-events: none; }
-        .hud { font-size: 18px; font-weight: bold; color: #ff3333; text-shadow: 2px 2px 4px #000; }
-        #xp-container { width: 60%; height: 8px; background: #222; margin: 5px auto; border: 1px solid #444; }
-        #xp-bar { width: 0%; height: 100%; background: #00ffcc; }
-        #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; flex-direction: column; justify-content: center; align-items: center; pointer-events: all; }
-        .card { background: #1a1a2e; border: 2px solid #444; padding: 20px; margin: 10px; width: 250px; text-align: center; cursor: pointer; border-radius: 10px; }
-        .card:hover { border-color: #00ffcc; background: #252545; }
+        .hud { font-size: 16px; font-weight: bold; color: #ff3333; }
+        #xp-bar-bg { width: 80%; height: 6px; background: #222; margin: 5px auto; border-radius: 3px; }
+        #xp-bar-fill { width: 0%; height: 100%; background: #00ffcc; border-radius: 3px; transition: width 0.2s; }
+        #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; flex-direction: column; justify-content: center; align-items: center; pointer-events: all; }
+        .card { background: #1a1a2e; border: 1px solid #444; padding: 15px; margin: 5px; width: 200px; text-align: center; border-radius: 8px; }
     </style>
 </head>
 <body>
     <div id="ui">
         <div class="hud">HP: <span id="hp">🩸🩸🩸</span> | LVL: <span id="lvl">1</span></div>
-        <div id="xp-container"><div id="xp-bar"></div></div>
+        <div id="xp-bar-bg"><div id="xp-bar-fill"></div></div>
     </div>
 
     <div id="overlay">
-        <h2 style="color: #00ffcc;">LEVEL UP! CHOOSE AN UPGRADE</h2>
+        <h2 style="color: #00ffcc;">UPGRADE</h2>
         <div id="choices"></div>
     </div>
 
@@ -35,59 +34,78 @@ const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-// Game State
+// --- Game Constants ---
+const ARENA_SIZE = 1000;
 let gameState = "PLAYING";
 let hp = 3, level = 1, xp = 0, xpNeeded = 5;
 let invulnTimer = 0;
-const ARENA_SIZE = 1200; // Large square arena
 
 const player = {
     x: 0, y: 0, 
-    speed: 4, 
-    hasJump: false, 
-    hasShield: false,
-    jumpCD: 0, 
-    shieldCD: 0,
-    fireRate: 1200,
-    lastShot: 0,
-    isJumping: false,
-    jumpTime: 0,
-    isShielded: false,
-    shieldTime: 0
+    speed: 3.5, 
+    size: 20,
+    hasJump: false, hasShield: false,
+    jumpCD: 0, shieldCD: 0,
+    fireRate: 1000, lastShot: 0,
+    isJumping: false, jumpTime: 0,
+    isShielded: false, shieldTime: 0
 };
 
 let enemies = [], bullets = [], enemyBullets = [], gems = [], shockwaves = [];
-const gridSize = 64;
 
-// Input Handling
-let keys = {};
-window.addEventListener('keydown', e => keys[e.code] = true);
-window.addEventListener('keyup', e => keys[e.code] = false);
+// --- Movement & Input ---
+let joystick = { active: false, startX: 0, startY: 0, currX: 0, currY: 0 };
+let moveDir = { x: 0, y: 0 };
 
-let touchStartY = 0;
-window.addEventListener('touchstart', e => touchStartY = e.touches[0].clientY);
-window.addEventListener('touchend', e => {
-    let dy = e.changedTouches[0].clientY - touchStartY;
-    if (dy < -50) { // Swipe Up logic
+window.addEventListener('touchstart', e => {
+    joystick.active = true;
+    joystick.startX = e.touches[0].clientX;
+    joystick.startY = e.touches[0].clientY;
+    joystick.currX = joystick.startX;
+    joystick.currY = joystick.startY;
+});
+
+window.addEventListener('touchmove', e => {
+    if (!joystick.active) return;
+    joystick.currX = e.touches[0].clientX;
+    joystick.currY = e.touches[0].clientY;
+    
+    let dx = joystick.currX - joystick.startX;
+    let dy = joystick.currY - joystick.startY;
+    let dist = Math.hypot(dx, dy);
+    if (dist > 10) {
+        moveDir.x = dx / dist;
+        moveDir.y = dy / dist;
+    }
+    // Skill swipe check (fast swipe up)
+    if (dy < -60 && Math.abs(dx) < 30) {
         if (player.hasJump && player.jumpCD <= 0) startJump();
         else if (player.hasShield && player.shieldCD <= 0) startShield();
     }
 });
 
-function startJump() {
-    player.isJumping = true; player.jumpTime = 40; player.jumpCD = 180;
-}
-function startShield() {
-    player.isShielded = true; player.shieldTime = 120; player.shieldCD = 300;
-}
+window.addEventListener('touchend', () => {
+    joystick.active = false;
+    moveDir = { x: 0, y: 0 };
+});
+
+// Keyboard Fallback
+const keys = {};
+window.addEventListener('keydown', e => keys[e.code] = true);
+window.addEventListener('keyup', e => keys[e.code] = false);
+
+function startJump() { player.isJumping = true; player.jumpTime = 30; player.jumpCD = 180; }
+function startShield() { player.isShielded = true; player.shieldTime = 120; player.shieldCD = 300; }
 
 class Enemy {
     constructor(type) {
-        const side = Math.random() * Math.PI * 2;
-        this.x = Math.cos(side) * 800 + player.x;
-        this.y = Math.sin(side) * 800 + player.y;
-        this.type = type; // 'shambler' or 'archer'
-        this.speed = type === 'shambler' ? 1.5 : 1;
+        // Spawn randomly outside a radius
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 500; // Just outside the screen center
+        this.x = Math.cos(angle) * dist + player.x;
+        this.y = Math.sin(angle) * dist + player.y;
+        this.type = type;
+        this.speed = type === 'shambler' ? 1.2 : 0.8;
         this.lastShot = 0;
     }
     update() {
@@ -99,23 +117,14 @@ class Enemy {
             this.x += (dx / dist) * this.speed;
             this.y += (dy / dist) * this.speed;
         } else {
-            // Archer behavior: keep distance
-            if (dist > 300) {
-                this.x += (dx / dist) * this.speed;
-                this.y += (dy / dist) * this.speed;
-            } else if (dist < 250) {
-                this.x -= (dx / dist) * this.speed;
-                this.y -= (dy / dist) * this.speed;
-            }
-            // Shoot at player
-            if (Date.now() - this.lastShot > 2000) {
-                enemyBullets.push({ x: this.x, y: this.y, vx: (dx/dist)*5, vy: (dy/dist)*5 });
+            if (dist > 200) { this.x += (dx / dist) * this.speed; this.y += (dy / dist) * this.speed; }
+            if (Date.now() - this.lastShot > 2500) {
+                enemyBullets.push({ x: this.x, y: this.y, vx: (dx/dist)*4, vy: (dy/dist)*4 });
                 this.lastShot = Date.now();
             }
         }
-        // Collision
-        if (dist < 30 && invulnTimer <= 0 && !player.isJumping) {
-            if (player.isShielded) { player.isShielded = false; player.shieldTime = 0; invulnTimer = 40; }
+        if (dist < 25 && invulnTimer <= 0 && !player.isJumping) {
+            if (player.isShielded) { player.isShielded = false; invulnTimer = 30; }
             else { hp--; invulnTimer = 60; updateHUD(); }
         }
     }
@@ -123,42 +132,39 @@ class Enemy {
 
 function updateHUD() {
     document.getElementById('hp').innerText = "🩸".repeat(Math.max(0, hp));
-    document.getElementById('xp-bar').style.width = (xp / xpNeeded * 100) + "%";
+    document.getElementById('xp-bar-fill').style.width = (xp / xpNeeded * 100) + "%";
     document.getElementById('lvl').innerText = level;
+    if (hp <= 0) { alert("Game Over!"); location.reload(); }
 }
 
 function levelUp() {
     gameState = "PAUSED";
     document.getElementById('overlay').style.display = 'flex';
-    const choices = [
-        { name: "Scurry Jump", desc: "Swipe up to jump/slam", action: () => player.hasJump = true },
-        { name: "Blood Shield", desc: "Swipe up for temporary bubble", action: () => player.hasShield = true },
-        { name: "Rapid Fire", desc: "Shoot 20% faster", action: () => player.fireRate *= 0.8 }
-    ];
     const container = document.getElementById('choices');
-    container.innerHTML = "";
-    choices.sort(() => Math.random() - 0.5).slice(0, 2).forEach(c => {
-        let div = document.createElement('div');
-        div.className = 'card';
-        div.innerHTML = `<h3>${c.name}</h3><p>${c.desc}</p>`;
-        div.onclick = () => { c.action(); gameState = "PLAYING"; document.getElementById('overlay').style.display = 'none'; };
-        container.appendChild(div);
-    });
+    container.innerHTML = `<div class="card" onclick="upgrade('JUMP')">Unlock Jump</div><div class="card" onclick="upgrade('FIRE')">Fire Rate +</div>`;
 }
 
+window.upgrade = (type) => {
+    if (type === 'JUMP') player.hasJump = true;
+    if (type === 'FIRE') player.fireRate *= 0.8;
+    gameState = "PLAYING";
+    document.getElementById('overlay').style.display = 'none';
+};
+
 function update() {
-    if (gameState === "PAUSED" || hp <= 0) return;
+    if (gameState !== "PLAYING") return;
     if (invulnTimer > 0) invulnTimer--;
     if (player.jumpCD > 0) player.jumpCD--;
-    if (player.shieldCD > 0) player.shieldCD--;
 
-    // Movement
-    if (keys['KeyW']) player.y -= player.speed;
-    if (keys['KeyS']) player.y += player.speed;
-    if (keys['KeyA']) player.x -= player.speed;
-    if (keys['KeyD']) player.x += player.speed;
+    // Move Logic (Keyboard + Joystick)
+    let mx = moveDir.x; let my = moveDir.y;
+    if (keys['KeyW']) my = -1; if (keys['KeyS']) my = 1;
+    if (keys['KeyA']) mx = -1; if (keys['KeyD']) mx = 1;
+    
+    player.x += mx * player.speed;
+    player.y += my * player.speed;
 
-    // Arena Constrain
+    // Constrain to Arena
     player.x = Math.max(-ARENA_SIZE, Math.min(ARENA_SIZE, player.x));
     player.y = Math.max(-ARENA_SIZE, Math.min(ARENA_SIZE, player.y));
 
@@ -166,24 +172,13 @@ function update() {
         player.jumpTime--;
         if (player.jumpTime === 0) { player.isJumping = false; shockwaves.push({ x: player.x, y: player.y, r: 10, op: 1 }); }
     }
-    if (player.isShielded) {
-        player.shieldTime--;
-        if (player.shieldTime <= 0) player.isShielded = false;
-    }
 
-    // Auto-Shoot
-    if (Date.now() - player.lastShot > player.fireRate && enemies.length > 0) {
-        let nearest = enemies.reduce((a, b) => Math.hypot(a.x-player.x, a.y-player.y) < Math.hypot(b.x-player.x, b.y-player.y) ? a : b);
-        let d = Math.hypot(nearest.x - player.x, nearest.y - player.y);
-        bullets.push({ x: player.x, y: player.y, vx: ((nearest.x-player.x)/d)*12, vy: ((nearest.y-player.y)/d)*12 });
-        player.lastShot = Date.now();
-    }
-
-    // Processing Arrays
+    // Spawn & Enemies
+    if (Math.random() < 0.02 && enemies.length < 20) enemies.push(new Enemy(Math.random() > 0.3 ? 'shambler' : 'archer'));
     enemies.forEach((en, i) => {
         en.update();
         bullets.forEach((b, bi) => {
-            if (Math.hypot(b.x - en.x, b.y - en.y) < 30) {
+            if (Math.hypot(b.x - en.x, b.y - en.y) < 25) {
                 gems.push({ x: en.x, y: en.y });
                 enemies.splice(i, 1);
                 bullets.splice(bi, 1);
@@ -193,10 +188,8 @@ function update() {
 
     enemyBullets.forEach((eb, i) => {
         eb.x += eb.vx; eb.y += eb.vy;
-        if (Math.hypot(eb.x - player.x, eb.y - player.y) < 20 && !player.isJumping) {
-            if (!player.isShielded) hp--;
-            enemyBullets.splice(i, 1);
-            updateHUD();
+        if (Math.hypot(eb.x - player.x, eb.y - player.y) < 15 && !player.isJumping) {
+            hp--; enemyBullets.splice(i, 1); updateHUD();
         }
     });
 
@@ -204,62 +197,58 @@ function update() {
 
     gems.forEach((g, i) => {
         const d = Math.hypot(g.x - player.x, g.y - player.y);
-        if (d < 150) { g.x += (player.x - g.x)/d*6; g.y += (player.y - g.y)/d*6; }
-        if (d < 20) { gems.splice(i, 1); xp++; updateHUD(); if (xp >= xpNeeded) { xp=0; xpNeeded += 3; levelUp(); } }
+        if (d < 100) { g.x += (player.x - g.x)/d*5; g.y += (player.y - g.y)/d*5; }
+        if (d < 15) { gems.splice(i, 1); xp++; updateHUD(); if (xp >= xpNeeded) { xp=0; levelUp(); } }
     });
 
-    if (Math.random() < 0.02) enemies.push(new Enemy(Math.random() > 0.3 ? 'shambler' : 'archer'));
+    if (Date.now() - player.lastShot > player.fireRate && enemies.length > 0) {
+        let nearest = enemies[0];
+        enemies.forEach(en => { if(Math.hypot(en.x-player.x, en.y-player.y) < Math.hypot(nearest.x-player.x, nearest.y-player.y)) nearest = en; });
+        let dist = Math.hypot(nearest.x - player.x, nearest.y - player.y);
+        bullets.push({ x: player.x, y: player.y, vx: ((nearest.x-player.x)/dist)*8, vy: ((nearest.y-player.y)/dist)*8 });
+        player.lastShot = Date.now();
+    }
 }
 
 function draw() {
     update();
-    ctx.fillStyle = '#0a0510';
+    ctx.fillStyle = '#050208';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.save();
     ctx.translate(canvas.width/2 - player.x, canvas.height/2 - player.y);
 
-    // Draw Arena Bounds
-    ctx.strokeStyle = '#331144'; ctx.lineWidth = 10;
+    // Arena Border
+    ctx.strokeStyle = "red"; ctx.lineWidth = 5;
     ctx.strokeRect(-ARENA_SIZE, -ARENA_SIZE, ARENA_SIZE*2, ARENA_SIZE*2);
 
-    // Draw Grid
-    ctx.strokeStyle = '#1a0f2e'; ctx.lineWidth = 1;
-    for(let i=-ARENA_SIZE; i<=ARENA_SIZE; i+=gridSize) {
-        ctx.beginPath(); ctx.moveTo(i, -ARENA_SIZE); ctx.lineTo(i, ARENA_SIZE); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(-ARENA_SIZE, i); ctx.lineTo(ARENA_SIZE, i); ctx.stroke();
-    }
-
-    // Entities
-    ctx.font = "30px serif";
-    enemies.forEach(en => ctx.fillText(en.type === 'shambler' ? "🧟" : "🏹", en.x - 15, en.y + 15));
-    gems.forEach(g => ctx.fillText("💎", g.x - 10, g.y + 10));
+    // Entities (Smaller scale)
+    ctx.font = "20px serif";
+    enemies.forEach(en => ctx.fillText(en.type === 'shambler' ? "🧟" : "🏹", en.x - 10, en.y + 10));
+    gems.forEach(g => ctx.fillText("💎", g.x - 8, g.y + 8));
     
-    ctx.fillStyle = "white";
-    bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill(); });
-    ctx.fillStyle = "red";
-    enemyBullets.forEach(eb => { ctx.beginPath(); ctx.arc(eb.x, eb.y, 5, 0, Math.PI*2); ctx.fill(); });
+    ctx.fillStyle = "white"; bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 3, 0, Math.PI*2); ctx.fill(); });
+    ctx.fillStyle = "red"; enemyBullets.forEach(eb => { ctx.beginPath(); ctx.arc(eb.x, eb.y, 4, 0, Math.PI*2); ctx.fill(); });
 
-    // Shockwaves
     shockwaves.forEach((sw, i) => {
         ctx.strokeStyle = `rgba(0, 255, 200, ${sw.op})`;
-        ctx.lineWidth = 4;
         ctx.beginPath(); ctx.arc(sw.x, sw.y, sw.r, 0, Math.PI*2); ctx.stroke();
-        sw.r += 5; sw.op -= 0.02;
-        if (sw.op <= 0) shockwaves.splice(i, 1);
+        sw.r += 4; sw.op -= 0.03; if (sw.op <= 0) shockwaves.splice(i, 1);
     });
 
     // Player
-    if (player.isShielded) {
-        ctx.strokeStyle = "cyan"; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.arc(player.x, player.y, 40, 0, Math.PI*2); ctx.stroke();
-    }
-    let scale = player.isJumping ? 1.8 : 1;
-    ctx.font = (40 * scale) + "px serif";
-    ctx.textAlign = "center";
-    if (invulnTimer % 10 < 5) ctx.fillText("🧛", player.x, player.y + 15);
+    ctx.font = (player.isJumping ? 40 : 30) + "px serif";
+    if (invulnTimer % 10 < 5) ctx.fillText("🧛", player.x - 15, player.y + 10);
 
     ctx.restore();
+
+    // Joystick Draw
+    if (joystick.active) {
+        ctx.strokeStyle = "rgba(255,255,255,0.2)";
+        ctx.beginPath(); ctx.arc(joystick.startX, joystick.startY, 40, 0, Math.PI*2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(joystick.currX, joystick.currY, 20, 0, Math.PI*2); ctx.stroke();
+    }
+
     requestAnimationFrame(draw);
 }
 draw();
