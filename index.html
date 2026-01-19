@@ -2,202 +2,153 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Vampire Runner Roguelike</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Survivor Core - Auto Aim</title>
     <style>
-        body { margin: 0; background: #1a1a1a; color: white; font-family: sans-serif; overflow: hidden; touch-action: none; }
-        canvas { display: block; margin: 0 auto; background: #222; border-left: 2px solid #444; border-right: 2px solid #444; }
-        #ui { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); text-align: center; pointer-events: none; width: 100%; }
-        .stat { font-size: 20px; font-weight: bold; text-shadow: 2px 2px black; }
-        #xp-bar-container { width: 80%; height: 10px; background: #444; margin: 5px auto; border-radius: 5px; overflow: hidden; }
-        #xp-bar { width: 0%; height: 100%; background: #00ff00; transition: width 0.2s; }
-        #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; flex-direction: column; justify-content: center; align-items: center; pointer-events: all; }
-        button { padding: 15px 30px; font-size: 18px; cursor: pointer; background: #800; color: white; border: none; margin: 10px; border-radius: 5px; }
+        body { margin: 0; background: #121212; overflow: hidden; color: white; font-family: sans-serif; }
+        canvas { display: block; background: #1a1a1a; }
+        #stats { position: absolute; top: 10px; left: 10px; pointer-events: none; }
     </style>
 </head>
 <body>
 
-    <div id="ui">
-        <div class="stat">LVL: <span id="lvl-val">1</span> | Score: <span id="score-val">0</span></div>
-        <div id="xp-bar-container"><div id="xp-bar"></div></div>
+    <div id="stats">
+        Kills: <span id="kills">0</span>
     </div>
-
-    <div id="overlay">
-        <h2 id="msg">LEVEL UP! Choose a Boon:</h2>
-        <div id="choices"></div>
-    </div>
-
     <canvas id="gameCanvas"></canvas>
 
 <script>
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-const xpBar = document.getElementById('xp-bar');
-const overlay = document.getElementById('overlay');
 
-// Game Constants
-const LANES = 3;
-const LANE_WIDTH = 100;
-canvas.width = LANES * LANE_WIDTH;
+canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-let gameState = "PLAYING";
-let score = 0;
-let level = 1;
-let xp = 0;
-let xpNeeded = 100;
-let speed = 5;
-
-// Player Object
 const player = {
-    lane: 1, // 0, 1, 2
-    y: canvas.height - 150,
-    state: "RUNNING", // "JUMPING", "SLIDING"
-    timer: 0,
-    auraSize: 60,
-    damage: 10
+    x: canvas.width / 2,
+    y: canvas.height / 2,
+    size: 20,
+    speed: 3,
+    emoji: "🧙",
+    lastShot: 0,
+    shotInterval: 800 // ms
 };
 
-let enemies = [];
-let pickups = [];
+const enemies = [];
+const bullets = [];
+let kills = 0;
+const keys = {};
 
-// Input Handling
-window.addEventListener('keydown', (e) => {
-    if (gameState !== "PLAYING") return;
-    if (e.key === "ArrowLeft" && player.lane > 0) player.lane--;
-    if (e.key === "ArrowRight" && player.lane < 2) player.lane++;
-    if (e.key === "ArrowUp" && player.state === "RUNNING") { player.state = "JUMPING"; player.timer = 30; }
-    if (e.key === "ArrowDown" && player.state === "RUNNING") { player.state = "SLIDING"; player.timer = 30; }
-});
+// Input listeners
+window.addEventListener('keydown', e => keys[e.code] = true);
+window.addEventListener('keyup', e => keys[e.code] = false);
 
-function spawnObject() {
-    if (gameState !== "PLAYING") return;
-    const lane = Math.floor(Math.random() * LANES);
-    const type = Math.random() > 0.3 ? "ENEMY" : "XP";
-    
-    if (type === "ENEMY") {
-        const isTall = Math.random() > 0.7; // Needs slide
-        enemies.push({ lane, y: -50, emoji: isTall ? "🕸️" : "🧟", type: isTall ? "TALL" : "NORMAL" });
-    } else {
-        pickups.push({ lane, y: -50, emoji: "💎" });
-    }
-}
-
-setInterval(spawnObject, 1000);
-
-function update() {
-    if (gameState !== "PLAYING") return;
-
-    score++;
-    speed += 0.001;
-
-    // Handle Player Actions
-    if (player.timer > 0) {
-        player.timer--;
-        if (player.timer === 0) player.state = "RUNNING";
-    }
-
-    // Move and Check Enemies
-    enemies.forEach((en, index) => {
-        en.y += speed;
+class Enemy {
+    constructor() {
+        // Spawn randomly outside the canvas view
+        const side = Math.floor(Math.random() * 4);
+        if (side === 0) { this.x = Math.random() * canvas.width; this.y = -50; } // Top
+        else if (side === 1) { this.x = canvas.width + 50; this.y = Math.random() * canvas.height; } // Right
+        else if (side === 2) { this.x = Math.random() * canvas.width; this.y = canvas.height + 50; } // Bottom
+        else { this.x = -50; this.y = Math.random() * canvas.height; } // Left
         
-        // Auto-Attack Logic (Vampire Style)
-        let dist = Math.abs(en.y - player.y);
-        if (en.lane === player.lane && dist < player.auraSize) {
-            enemies.splice(index, 1);
-            score += 50;
-        }
-
-        // Collision Logic
-        if (en.lane === player.lane && dist < 30) {
-            if (en.type === "TALL" && player.state !== "SLIDING") gameOver();
-            if (en.type === "NORMAL" && player.state !== "JUMPING") {
-               // Normal enemies are hit by aura, but if they get too close without jumping:
-               gameOver();
-            }
-        }
-    });
-
-    // Move Pickups
-    pickups.forEach((p, index) => {
-        p.y += speed;
-        if (p.lane === player.lane && Math.abs(p.y - player.y) < 40) {
-            pickups.splice(index, 1);
-            gainXP(25);
-        }
-    });
-
-    // Clean up off-screen
-    enemies = enemies.filter(e => e.y < canvas.height);
-    pickups = pickups.filter(p => p.y < canvas.height);
-}
-
-function gainXP(amount) {
-    xp += amount;
-    if (xp >= xpNeeded) {
-        levelUp();
+        this.speed = 1 + Math.random() * 1;
+        this.emoji = "🧟";
     }
-    xpBar.style.width = (xp / xpNeeded * 100) + "%";
+
+    update() {
+        // Move towards player
+        const dx = player.x - this.x;
+        const dy = player.y - this.y;
+        const angle = Math.atan2(dy, dx);
+        this.x += Math.cos(angle) * this.speed;
+        this.y += Math.sin(angle) * this.speed;
+    }
 }
 
-function levelUp() {
-    gameState = "PAUSED";
-    overlay.style.display = "flex";
-    document.getElementById('choices').innerHTML = `
-        <button onclick="upgrade('AURA')">Expand Aura ⭕</button>
-        <button onclick="upgrade('SPEED')">Swift Boots 👟</button>
-    `;
+class Bullet {
+    constructor(x, y, targetX, targetY) {
+        this.x = x;
+        this.y = y;
+        const angle = Math.atan2(targetY - y, targetX - x);
+        this.speed = 7;
+        this.dx = Math.cos(angle) * this.speed;
+        this.dy = Math.sin(angle) * this.speed;
+    }
+    update() {
+        this.x += this.dx;
+        this.y += this.dy;
+    }
 }
 
-window.upgrade = (type) => {
-    if (type === 'AURA') player.auraSize += 20;
-    if (type === 'SPEED') speed += 1;
-    xp = 0;
-    level++;
-    xpNeeded *= 1.2;
-    document.getElementById('lvl-val').innerText = level;
-    overlay.style.display = "none";
-    gameState = "PLAYING";
-};
-
-function gameOver() {
-    gameState = "GAMEOVER";
-    document.getElementById('msg').innerText = "FATALITY! Score: " + score;
-    document.getElementById('choices').innerHTML = `<button onclick="location.reload()">Restart</button>`;
-    overlay.style.display = "flex";
+function getNearestEnemy() {
+    if (enemies.length === 0) return null;
+    return enemies.reduce((nearest, enemy) => {
+        const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+        if (dist < nearest.dist) return { enemy, dist };
+        return nearest;
+    }, { enemy: null, dist: Infinity }).enemy;
 }
 
-function draw() {
+function spawnEnemy() {
+    if (enemies.length < 50) enemies.push(new Enemy());
+}
+
+setInterval(spawnEnemy, 1000);
+
+function gameLoop(time) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw Lanes
-    ctx.strokeStyle = "#333";
-    for(let i=1; i<LANES; i++) {
-        ctx.beginPath(); ctx.moveTo(i*LANE_WIDTH, 0); ctx.lineTo(i*LANE_WIDTH, canvas.height); ctx.stroke();
+    // 1. Move Player
+    if (keys['ArrowUp'] || keys['KeyW']) player.y -= player.speed;
+    if (keys['ArrowDown'] || keys['KeyS']) player.y += player.speed;
+    if (keys['ArrowLeft'] || keys['KeyA']) player.x -= player.speed;
+    if (keys['ArrowRight'] || keys['KeyD']) player.x += player.speed;
+
+    // 2. Auto-Shoot Nearest
+    if (time - player.lastShot > player.shotInterval) {
+        const target = getNearestEnemy();
+        if (target) {
+            bullets.push(new Bullet(player.x, player.y, target.x, target.y));
+            player.lastShot = time;
+        }
     }
 
-    // Draw Player
-    ctx.font = player.state === "JUMPING" ? "60px serif" : (player.state === "SLIDING" ? "30px serif" : "50px serif");
-    ctx.textAlign = "center";
-    
-    // Draw Aura
-    ctx.beginPath();
-    ctx.arc(player.lane * LANE_WIDTH + LANE_WIDTH/2, player.y, player.auraSize, 0, Math.PI*2);
-    ctx.fillStyle = "rgba(255, 0, 0, 0.2)";
-    ctx.fill();
+    // 3. Draw & Update Bullets
+    bullets.forEach((b, i) => {
+        b.update();
+        ctx.fillStyle = "yellow";
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, 4, 0, Math.PI*2);
+        ctx.fill();
+        if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) bullets.splice(i, 1);
+    });
 
-    ctx.fillText("🏃", player.lane * LANE_WIDTH + LANE_WIDTH/2, player.y + 15);
+    // 4. Draw & Update Enemies
+    enemies.forEach((en, i) => {
+        en.update();
+        ctx.font = "24px serif";
+        ctx.fillText(en.emoji, en.x, en.y);
 
-    // Draw Enemies & Pickups
-    ctx.font = "40px serif";
-    enemies.forEach(en => ctx.fillText(en.emoji, en.lane * LANE_WIDTH + LANE_WIDTH/2, en.y));
-    pickups.forEach(p => ctx.fillText(p.emoji, p.lane * LANE_WIDTH + LANE_WIDTH/2, p.y));
+        // Collision with bullets
+        bullets.forEach((b, bi) => {
+            if (Math.hypot(b.x - en.x, b.y - en.y) < 20) {
+                enemies.splice(i, 1);
+                bullets.splice(bi, 1);
+                kills++;
+                document.getElementById('kills').innerText = kills;
+            }
+        });
+    });
 
-    document.getElementById('score-val').innerText = score;
-    requestAnimationFrame(() => { update(); draw(); });
+    // 5. Draw Player
+    ctx.font = "30px serif";
+    ctx.fillText(player.emoji, player.x - 15, player.y + 10);
+
+    requestAnimationFrame(gameLoop);
 }
 
-draw();
+requestAnimationFrame(gameLoop);
 </script>
 </body>
 </html>
