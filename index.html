@@ -3,30 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Vampire Progression</title>
+    <title>Vampire Arena</title>
     <style>
         body { margin: 0; background: #050208; overflow: hidden; color: #e0e0e0; font-family: sans-serif; touch-action: none; }
         canvas { display: block; }
         #ui { position: absolute; top: 10px; width: 100%; text-align: center; pointer-events: none; }
-        .hud { font-size: 18px; font-weight: bold; color: #ff3333; text-shadow: 2px 2px 4px #000; margin-bottom: 5px; }
-        #xp-container { width: 60%; height: 8px; background: #222; margin: 0 auto; border: 1px solid #444; border-radius: 4px; overflow: hidden; }
-        #xp-bar { width: 0%; height: 100%; background: #00ffcc; transition: width 0.3s; }
-        #cooldown-container { width: 40%; height: 4px; background: #222; margin: 5px auto; border-radius: 2px; }
-        #cooldown-bar { width: 100%; height: 100%; background: #ffaa00; }
-        #game-over { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.9); padding: 20px; border: 2px solid red; display: none; text-align: center; pointer-events: all; }
+        .hud { font-size: 18px; font-weight: bold; color: #ff3333; text-shadow: 2px 2px 4px #000; }
+        #xp-container { width: 60%; height: 8px; background: #222; margin: 5px auto; border: 1px solid #444; }
+        #xp-bar { width: 0%; height: 100%; background: #00ffcc; }
+        #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; flex-direction: column; justify-content: center; align-items: center; pointer-events: all; }
+        .card { background: #1a1a2e; border: 2px solid #444; padding: 20px; margin: 10px; width: 250px; text-align: center; cursor: pointer; border-radius: 10px; }
+        .card:hover { border-color: #00ffcc; background: #252545; }
     </style>
 </head>
 <body>
     <div id="ui">
         <div class="hud">HP: <span id="hp">🩸🩸🩸</span> | LVL: <span id="lvl">1</span></div>
         <div id="xp-container"><div id="xp-bar"></div></div>
-        <div id="cooldown-container"><div id="cooldown-bar"></div></div>
-        <div style="font-size: 10px; color: #ffaa00;">JUMP READY</div>
     </div>
-    <div id="game-over">
-        <h1>STAKED</h1>
-        <button onclick="location.reload()" style="padding: 10px 20px; cursor: pointer;">RESURRECT</button>
+
+    <div id="overlay">
+        <h2 style="color: #00ffcc;">LEVEL UP! CHOOSE AN UPGRADE</h2>
+        <div id="choices"></div>
     </div>
+
     <canvas id="gameCanvas"></canvas>
 
 <script>
@@ -35,193 +35,234 @@ const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-// Stats
-let hp = 3, kills = 0, level = 1, xp = 0, xpNeeded = 5;
+// Game State
+let gameState = "PLAYING";
+let hp = 3, level = 1, xp = 0, xpNeeded = 5;
 let invulnTimer = 0;
-let worldRotation = 0, targetRotation = 0;
-const scrollSpeed = 4.5;
-const playerPos = { x: canvas.width / 2, y: canvas.height / 2 };
+const ARENA_SIZE = 1200; // Large square arena
 
-// Jump Cooldown (3 seconds at 60fps = 180)
-let isJumping = false, jumpTime = 0, jumpCooldown = 0;
-const JUMP_MAX_COOLDOWN = 180;
+const player = {
+    x: 0, y: 0, 
+    speed: 4, 
+    hasJump: false, 
+    hasShield: false,
+    jumpCD: 0, 
+    shieldCD: 0,
+    fireRate: 1200,
+    lastShot: 0,
+    isJumping: false,
+    jumpTime: 0,
+    isShielded: false,
+    shieldTime: 0
+};
 
-let enemies = [], bullets = [], shockwaves = [], gems = [];
-const gridSize = 128;
-let worldX = 0, worldY = 0;
-let lastShotTime = 0;
-const fireRate = 1200;
+let enemies = [], bullets = [], enemyBullets = [], gems = [], shockwaves = [];
+const gridSize = 64;
 
-// Input logic
-let touchStartX = 0, touchStartY = 0;
-window.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY; });
+// Input Handling
+let keys = {};
+window.addEventListener('keydown', e => keys[e.code] = true);
+window.addEventListener('keyup', e => keys[e.code] = false);
+
+let touchStartY = 0;
+window.addEventListener('touchstart', e => touchStartY = e.touches[0].clientY);
 window.addEventListener('touchend', e => {
-    let dx = e.changedTouches[0].clientX - touchStartX;
     let dy = e.changedTouches[0].clientY - touchStartY;
-    if (dy < -60 && Math.abs(dx) < 40) startJump();
-    else if (Math.abs(dx) > 40) targetRotation += (dx > 0 ? 1 : -1) * (95 * Math.PI / 180);
-});
-window.addEventListener('keydown', e => {
-    if (e.key === "ArrowLeft") targetRotation -= (95 * Math.PI / 180);
-    if (e.key === "ArrowRight") targetRotation += (95 * Math.PI / 180);
-    if (e.code === "Space") startJump();
+    if (dy < -50) { // Swipe Up logic
+        if (player.hasJump && player.jumpCD <= 0) startJump();
+        else if (player.hasShield && player.shieldCD <= 0) startShield();
+    }
 });
 
 function startJump() {
-    if (isJumping || jumpCooldown > 0) return;
-    isJumping = true;
-    jumpTime = 40;
-    jumpCooldown = JUMP_MAX_COOLDOWN;
+    player.isJumping = true; player.jumpTime = 40; player.jumpCD = 180;
 }
-
-function gainXP() {
-    xp++;
-    if (xp >= xpNeeded) {
-        level++;
-        xp = 0;
-        xpNeeded += 5;
-        document.getElementById('lvl').innerText = level;
-    }
-    document.getElementById('xp-bar').style.width = (xp / xpNeeded * 100) + "%";
+function startShield() {
+    player.isShielded = true; player.shieldTime = 120; player.shieldCD = 300;
 }
 
 class Enemy {
-    constructor() {
-        const angle = Math.random() * Math.PI * 2;
-        const dist = Math.max(canvas.width, canvas.height);
-        this.x = Math.cos(angle) * dist;
-        this.y = Math.sin(angle) * dist;
-        this.speed = 1.8 + Math.random();
+    constructor(type) {
+        const side = Math.random() * Math.PI * 2;
+        this.x = Math.cos(side) * 800 + player.x;
+        this.y = Math.sin(side) * 800 + player.y;
+        this.type = type; // 'shambler' or 'archer'
+        this.speed = type === 'shambler' ? 1.5 : 1;
+        this.lastShot = 0;
     }
-    update(vx, vy) {
-        this.x += vx; this.y += vy;
-        const dx = -this.x, dy = -this.y;
-        const d = Math.hypot(dx, dy);
-        if (d > 5) { this.x += (dx / d) * this.speed; this.y += (dy / d) * this.speed; }
-        if (d < 30 && invulnTimer <= 0 && !isJumping) {
-            hp--; invulnTimer = 60;
-            document.getElementById('hp').innerText = "🩸".repeat(hp);
-            if (hp <= 0) document.getElementById('game-over').style.display = 'block';
+    update() {
+        const dx = player.x - this.x;
+        const dy = player.y - this.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (this.type === 'shambler') {
+            this.x += (dx / dist) * this.speed;
+            this.y += (dy / dist) * this.speed;
+        } else {
+            // Archer behavior: keep distance
+            if (dist > 300) {
+                this.x += (dx / dist) * this.speed;
+                this.y += (dy / dist) * this.speed;
+            } else if (dist < 250) {
+                this.x -= (dx / dist) * this.speed;
+                this.y -= (dy / dist) * this.speed;
+            }
+            // Shoot at player
+            if (Date.now() - this.lastShot > 2000) {
+                enemyBullets.push({ x: this.x, y: this.y, vx: (dx/dist)*5, vy: (dy/dist)*5 });
+                this.lastShot = Date.now();
+            }
+        }
+        // Collision
+        if (dist < 30 && invulnTimer <= 0 && !player.isJumping) {
+            if (player.isShielded) { player.isShielded = false; player.shieldTime = 0; invulnTimer = 40; }
+            else { hp--; invulnTimer = 60; updateHUD(); }
         }
     }
 }
 
-function update(currentTime) {
-    if (hp <= 0) return;
+function updateHUD() {
+    document.getElementById('hp').innerText = "🩸".repeat(Math.max(0, hp));
+    document.getElementById('xp-bar').style.width = (xp / xpNeeded * 100) + "%";
+    document.getElementById('lvl').innerText = level;
+}
+
+function levelUp() {
+    gameState = "PAUSED";
+    document.getElementById('overlay').style.display = 'flex';
+    const choices = [
+        { name: "Scurry Jump", desc: "Swipe up to jump/slam", action: () => player.hasJump = true },
+        { name: "Blood Shield", desc: "Swipe up for temporary bubble", action: () => player.hasShield = true },
+        { name: "Rapid Fire", desc: "Shoot 20% faster", action: () => player.fireRate *= 0.8 }
+    ];
+    const container = document.getElementById('choices');
+    container.innerHTML = "";
+    choices.sort(() => Math.random() - 0.5).slice(0, 2).forEach(c => {
+        let div = document.createElement('div');
+        div.className = 'card';
+        div.innerHTML = `<h3>${c.name}</h3><p>${c.desc}</p>`;
+        div.onclick = () => { c.action(); gameState = "PLAYING"; document.getElementById('overlay').style.display = 'none'; };
+        container.appendChild(div);
+    });
+}
+
+function update() {
+    if (gameState === "PAUSED" || hp <= 0) return;
     if (invulnTimer > 0) invulnTimer--;
-    if (jumpCooldown > 0) {
-        jumpCooldown--;
-        document.getElementById('cooldown-bar').style.width = ((JUMP_MAX_COOLDOWN - jumpCooldown) / JUMP_MAX_COOLDOWN * 100) + "%";
+    if (player.jumpCD > 0) player.jumpCD--;
+    if (player.shieldCD > 0) player.shieldCD--;
+
+    // Movement
+    if (keys['KeyW']) player.y -= player.speed;
+    if (keys['KeyS']) player.y += player.speed;
+    if (keys['KeyA']) player.x -= player.speed;
+    if (keys['KeyD']) player.x += player.speed;
+
+    // Arena Constrain
+    player.x = Math.max(-ARENA_SIZE, Math.min(ARENA_SIZE, player.x));
+    player.y = Math.max(-ARENA_SIZE, Math.min(ARENA_SIZE, player.y));
+
+    if (player.isJumping) {
+        player.jumpTime--;
+        if (player.jumpTime === 0) { player.isJumping = false; shockwaves.push({ x: player.x, y: player.y, r: 10, op: 1 }); }
+    }
+    if (player.isShielded) {
+        player.shieldTime--;
+        if (player.shieldTime <= 0) player.isShielded = false;
     }
 
-    worldRotation += (targetRotation - worldRotation) * 0.08;
-    const vx = Math.sin(worldRotation) * scrollSpeed;
-    const vy = -Math.cos(worldRotation) * scrollSpeed;
-    worldX += vx; worldY += vy;
-
-    if (isJumping) {
-        jumpTime--;
-        if (jumpTime === 0) {
-            isJumping = false;
-            shockwaves.push({ r: 10, opacity: 1 });
-        }
+    // Auto-Shoot
+    if (Date.now() - player.lastShot > player.fireRate && enemies.length > 0) {
+        let nearest = enemies.reduce((a, b) => Math.hypot(a.x-player.x, a.y-player.y) < Math.hypot(b.x-player.x, b.y-player.y) ? a : b);
+        let d = Math.hypot(nearest.x - player.x, nearest.y - player.y);
+        bullets.push({ x: player.x, y: player.y, vx: ((nearest.x-player.x)/d)*12, vy: ((nearest.y-player.y)/d)*12 });
+        player.lastShot = Date.now();
     }
 
-    // Process Shockwaves
-    shockwaves.forEach((sw, si) => {
-        sw.r += 10; sw.opacity -= 0.03;
-        if (sw.opacity <= 0) shockwaves.splice(si, 1);
-        enemies.forEach((en, ei) => {
-            if (Math.abs(Math.hypot(en.x, en.y) - sw.r) < 30) {
+    // Processing Arrays
+    enemies.forEach((en, i) => {
+        en.update();
+        bullets.forEach((b, bi) => {
+            if (Math.hypot(b.x - en.x, b.y - en.y) < 30) {
                 gems.push({ x: en.x, y: en.y });
-                enemies.splice(ei, 1);
+                enemies.splice(i, 1);
+                bullets.splice(bi, 1);
             }
         });
     });
 
-    // Process Enemies
-    if (Math.random() < 0.04 && enemies.length < 20) enemies.push(new Enemy());
-    enemies.forEach((en, i) => en.update(vx, vy));
-
-    // Process Gems (XP)
-    gems.forEach((gem, gi) => {
-        gem.x += vx; gem.y += vy; // Drift with world
-        const d = Math.hypot(gem.x, gem.y);
-        if (d < 150) { // Magnet effect
-            gem.x += (-gem.x / d) * 8;
-            gem.y += (-gem.y / d) * 8;
+    enemyBullets.forEach((eb, i) => {
+        eb.x += eb.vx; eb.y += eb.vy;
+        if (Math.hypot(eb.x - player.x, eb.y - player.y) < 20 && !player.isJumping) {
+            if (!player.isShielded) hp--;
+            enemyBullets.splice(i, 1);
+            updateHUD();
         }
-        if (d < 20) { gems.splice(gi, 1); gainXP(); }
     });
 
-    // Shooting
-    if (currentTime - lastShotTime > fireRate && enemies.length > 0) {
-        let nearest = enemies.reduce((a, b) => Math.hypot(a.x, a.y) < Math.hypot(b.x, b.y) ? a : b);
-        let d = Math.hypot(nearest.x, nearest.y);
-        if (d < 500) {
-            bullets.push({ x: 0, y: 0, vx: (nearest.x / d) * 14, vy: (nearest.y / d) * 14 });
-            lastShotTime = currentTime;
-        }
-    }
+    bullets.forEach(b => { b.x += b.vx; b.y += b.vy; });
 
-    bullets.forEach((b, i) => {
-        b.x += b.vx + vx * 0.4; b.y += b.vy + vy * 0.4;
-        enemies.forEach((en, ei) => {
-            if (Math.hypot(b.x - en.x, b.y - en.y) < 35) {
-                gems.push({ x: en.x, y: en.y });
-                enemies.splice(ei, 1);
-                bullets.splice(i, 1);
-            }
-        });
+    gems.forEach((g, i) => {
+        const d = Math.hypot(g.x - player.x, g.y - player.y);
+        if (d < 150) { g.x += (player.x - g.x)/d*6; g.y += (player.y - g.y)/d*6; }
+        if (d < 20) { gems.splice(i, 1); xp++; updateHUD(); if (xp >= xpNeeded) { xp=0; xpNeeded += 3; levelUp(); } }
     });
+
+    if (Math.random() < 0.02) enemies.push(new Enemy(Math.random() > 0.3 ? 'shambler' : 'archer'));
 }
 
-function draw(currentTime) {
-    update(currentTime);
+function draw() {
+    update();
     ctx.fillStyle = '#0a0510';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
     ctx.save();
-    ctx.translate(playerPos.x, playerPos.y);
+    ctx.translate(canvas.width/2 - player.x, canvas.height/2 - player.y);
 
-    // Background
-    ctx.strokeStyle = '#1e133a';
-    for (let x = (worldX % gridSize) - canvas.width; x < canvas.width; x += gridSize) {
-        ctx.beginPath(); ctx.moveTo(x, -canvas.height); ctx.lineTo(x, canvas.height); ctx.stroke();
-    }
-    for (let y = (worldY % gridSize) - canvas.height; y < canvas.height; y += gridSize) {
-        ctx.beginPath(); ctx.moveTo(-canvas.width, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+    // Draw Arena Bounds
+    ctx.strokeStyle = '#331144'; ctx.lineWidth = 10;
+    ctx.strokeRect(-ARENA_SIZE, -ARENA_SIZE, ARENA_SIZE*2, ARENA_SIZE*2);
+
+    // Draw Grid
+    ctx.strokeStyle = '#1a0f2e'; ctx.lineWidth = 1;
+    for(let i=-ARENA_SIZE; i<=ARENA_SIZE; i+=gridSize) {
+        ctx.beginPath(); ctx.moveTo(i, -ARENA_SIZE); ctx.lineTo(i, ARENA_SIZE); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-ARENA_SIZE, i); ctx.lineTo(ARENA_SIZE, i); ctx.stroke();
     }
 
-    // Gems
-    ctx.font = "16px serif";
-    gems.forEach(gem => ctx.fillText("💎", gem.x - 8, gem.y + 8));
+    // Entities
+    ctx.font = "30px serif";
+    enemies.forEach(en => ctx.fillText(en.type === 'shambler' ? "🧟" : "🏹", en.x - 15, en.y + 15));
+    gems.forEach(g => ctx.fillText("💎", g.x - 10, g.y + 10));
+    
+    ctx.fillStyle = "white";
+    bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill(); });
+    ctx.fillStyle = "red";
+    enemyBullets.forEach(eb => { ctx.beginPath(); ctx.arc(eb.x, eb.y, 5, 0, Math.PI*2); ctx.fill(); });
 
     // Shockwaves
-    shockwaves.forEach(sw => {
-        ctx.strokeStyle = `rgba(0, 255, 200, ${sw.opacity})`;
+    shockwaves.forEach((sw, i) => {
+        ctx.strokeStyle = `rgba(0, 255, 200, ${sw.op})`;
         ctx.lineWidth = 4;
-        ctx.beginPath(); ctx.arc(0, 0, sw.r, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(sw.x, sw.y, sw.r, 0, Math.PI*2); ctx.stroke();
+        sw.r += 5; sw.op -= 0.02;
+        if (sw.op <= 0) shockwaves.splice(i, 1);
     });
 
-    // Enemies & Bullets
-    ctx.font = "32px serif";
-    enemies.forEach(en => ctx.fillText("🧟", en.x - 16, en.y + 16));
-    ctx.fillStyle = '#fff';
-    bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI * 2); ctx.fill(); });
-
     // Player
-    let scale = isJumping ? 1.6 : 1;
-    ctx.font = (50 * scale) + "px serif";
-    ctx.textAlign = "center";
-    if (invulnTimer % 10 < 5) {
-        ctx.shadowBlur = 15; ctx.shadowColor = "red";
-        ctx.fillText("🧛", 0, 15);
+    if (player.isShielded) {
+        ctx.strokeStyle = "cyan"; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(player.x, player.y, 40, 0, Math.PI*2); ctx.stroke();
     }
-    
+    let scale = player.isJumping ? 1.8 : 1;
+    ctx.font = (40 * scale) + "px serif";
+    ctx.textAlign = "center";
+    if (invulnTimer % 10 < 5) ctx.fillText("🧛", player.x, player.y + 15);
+
     ctx.restore();
     requestAnimationFrame(draw);
 }
-requestAnimationFrame(draw);
+draw();
 </script>
 </body>
 </html>
