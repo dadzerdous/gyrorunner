@@ -1,118 +1,203 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Gyro Runner</title>
-    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Vampire Runner Roguelike</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
-        #overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-                   color: white; text-align: center; background: rgba(0,0,0,0.8); padding: 20px; border-radius: 10px; }
-        button { padding: 10px 20px; font-size: 18px; cursor: pointer; }
+        body { margin: 0; background: #1a1a1a; color: white; font-family: sans-serif; overflow: hidden; touch-action: none; }
+        canvas { display: block; margin: 0 auto; background: #222; border-left: 2px solid #444; border-right: 2px solid #444; }
+        #ui { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); text-align: center; pointer-events: none; width: 100%; }
+        .stat { font-size: 20px; font-weight: bold; text-shadow: 2px 2px black; }
+        #xp-bar-container { width: 80%; height: 10px; background: #444; margin: 5px auto; border-radius: 5px; overflow: hidden; }
+        #xp-bar { width: 0%; height: 100%; background: #00ff00; transition: width 0.2s; }
+        #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; flex-direction: column; justify-content: center; align-items: center; pointer-events: all; }
+        button { padding: 15px 30px; font-size: 18px; cursor: pointer; background: #800; color: white; border: none; margin: 10px; border-radius: 5px; }
     </style>
 </head>
 <body>
-    <div id="overlay">
-        <h1>Gyro Runner</h1>
-        <p>Rotate your phone to steer</p>
-        <button id="startBtn">Start Game</button>
+
+    <div id="ui">
+        <div class="stat">LVL: <span id="lvl-val">1</span> | Score: <span id="score-val">0</span></div>
+        <div id="xp-bar-container"><div id="xp-bar"></div></div>
     </div>
 
-    <script type="module">
-        import * as THREE from 'https://cdn.skypack.dev/three@0.136.0';
+    <div id="overlay">
+        <h2 id="msg">LEVEL UP! Choose a Boon:</h2>
+        <div id="choices"></div>
+    </div>
 
-        let scene, camera, renderer, player, tilt = 0;
-        let obstacles = [];
-        const speed = 0.2;
+    <canvas id="gameCanvas"></canvas>
 
-        function init() {
-            // Scene Setup
-            scene = new THREE.Scene();
-            scene.fog = new THREE.Fog(0x000000, 10, 50);
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            document.body.appendChild(renderer.domElement);
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const xpBar = document.getElementById('xp-bar');
+const overlay = document.getElementById('overlay');
 
-            // Lighting
-            const light = new THREE.DirectionalLight(0xffffff, 1);
-            light.position.set(0, 10, 5);
-            scene.add(light);
-            scene.add(new THREE.AmbientLight(0x404040));
+// Game Constants
+const LANES = 3;
+const LANE_WIDTH = 100;
+canvas.width = LANES * LANE_WIDTH;
+canvas.height = window.innerHeight;
 
-            // Player (The Runner)
-            const geometry = new THREE.BoxGeometry(1, 1, 1);
-            const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
-            player = new THREE.Mesh(geometry, material);
-            scene.add(player);
+let gameState = "PLAYING";
+let score = 0;
+let level = 1;
+let xp = 0;
+let xpNeeded = 100;
+let speed = 5;
 
-            // Camera Position (Top-Down/Behind)
-            camera.position.set(0, 10, 5);
-            camera.lookAt(player.position);
+// Player Object
+const player = {
+    lane: 1, // 0, 1, 2
+    y: canvas.height - 150,
+    state: "RUNNING", // "JUMPING", "SLIDING"
+    timer: 0,
+    auraSize: 60,
+    damage: 10
+};
 
-            // Start Animation
-            animate();
-            spawnObstacles();
+let enemies = [];
+let pickups = [];
+
+// Input Handling
+window.addEventListener('keydown', (e) => {
+    if (gameState !== "PLAYING") return;
+    if (e.key === "ArrowLeft" && player.lane > 0) player.lane--;
+    if (e.key === "ArrowRight" && player.lane < 2) player.lane++;
+    if (e.key === "ArrowUp" && player.state === "RUNNING") { player.state = "JUMPING"; player.timer = 30; }
+    if (e.key === "ArrowDown" && player.state === "RUNNING") { player.state = "SLIDING"; player.timer = 30; }
+});
+
+function spawnObject() {
+    if (gameState !== "PLAYING") return;
+    const lane = Math.floor(Math.random() * LANES);
+    const type = Math.random() > 0.3 ? "ENEMY" : "XP";
+    
+    if (type === "ENEMY") {
+        const isTall = Math.random() > 0.7; // Needs slide
+        enemies.push({ lane, y: -50, emoji: isTall ? "🕸️" : "🧟", type: isTall ? "TALL" : "NORMAL" });
+    } else {
+        pickups.push({ lane, y: -50, emoji: "💎" });
+    }
+}
+
+setInterval(spawnObject, 1000);
+
+function update() {
+    if (gameState !== "PLAYING") return;
+
+    score++;
+    speed += 0.001;
+
+    // Handle Player Actions
+    if (player.timer > 0) {
+        player.timer--;
+        if (player.timer === 0) player.state = "RUNNING";
+    }
+
+    // Move and Check Enemies
+    enemies.forEach((en, index) => {
+        en.y += speed;
+        
+        // Auto-Attack Logic (Vampire Style)
+        let dist = Math.abs(en.y - player.y);
+        if (en.lane === player.lane && dist < player.auraSize) {
+            enemies.splice(index, 1);
+            score += 50;
         }
 
-        function spawnObstacles() {
-            setInterval(() => {
-                const geom = new THREE.BoxGeometry(1, 1, 1);
-                const mat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-                const obs = new THREE.Mesh(geom, mat);
-                obs.position.set(Math.random() * 10 - 5, 0, -50);
-                scene.add(obs);
-                obstacles.push(obs);
-            }, 500);
-        }
-
-        function animate() {
-            requestAnimationFrame(animate);
-
-            // Move Player based on tilt
-            player.position.x += tilt * 0.05;
-            player.position.x = Math.max(-5, Math.min(5, player.position.x)); // Bounds
-
-            // Move Obstacles toward player
-            obstacles.forEach((obs, index) => {
-                obs.position.z += speed;
-                if (obs.position.z > 5) {
-                    scene.remove(obs);
-                    obstacles.splice(index, 1);
-                }
-            });
-
-            renderer.render(scene, camera);
-        }
-
-        // --- SENSOR LOGIC ---
-        document.getElementById('startBtn').addEventListener('click', () => {
-            document.getElementById('overlay').style.display = 'none';
-            
-            // Request permission for iOS 13+ 
-            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission()
-                    .then(permissionState => {
-                        if (permissionState === 'granted') {
-                            window.addEventListener('deviceorientation', handleOrientation);
-                        }
-                    });
-            } else {
-                window.addEventListener('deviceorientation', handleOrientation);
+        // Collision Logic
+        if (en.lane === player.lane && dist < 30) {
+            if (en.type === "TALL" && player.state !== "SLIDING") gameOver();
+            if (en.type === "NORMAL" && player.state !== "JUMPING") {
+               // Normal enemies are hit by aura, but if they get too close without jumping:
+               gameOver();
             }
-            init();
-        });
-
-        function handleOrientation(event) {
-            // Gamma is left-to-right tilt in degrees
-            tilt = event.gamma / 10; 
         }
+    });
 
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-    </script>
+    // Move Pickups
+    pickups.forEach((p, index) => {
+        p.y += speed;
+        if (p.lane === player.lane && Math.abs(p.y - player.y) < 40) {
+            pickups.splice(index, 1);
+            gainXP(25);
+        }
+    });
+
+    // Clean up off-screen
+    enemies = enemies.filter(e => e.y < canvas.height);
+    pickups = pickups.filter(p => p.y < canvas.height);
+}
+
+function gainXP(amount) {
+    xp += amount;
+    if (xp >= xpNeeded) {
+        levelUp();
+    }
+    xpBar.style.width = (xp / xpNeeded * 100) + "%";
+}
+
+function levelUp() {
+    gameState = "PAUSED";
+    overlay.style.display = "flex";
+    document.getElementById('choices').innerHTML = `
+        <button onclick="upgrade('AURA')">Expand Aura ⭕</button>
+        <button onclick="upgrade('SPEED')">Swift Boots 👟</button>
+    `;
+}
+
+window.upgrade = (type) => {
+    if (type === 'AURA') player.auraSize += 20;
+    if (type === 'SPEED') speed += 1;
+    xp = 0;
+    level++;
+    xpNeeded *= 1.2;
+    document.getElementById('lvl-val').innerText = level;
+    overlay.style.display = "none";
+    gameState = "PLAYING";
+};
+
+function gameOver() {
+    gameState = "GAMEOVER";
+    document.getElementById('msg').innerText = "FATALITY! Score: " + score;
+    document.getElementById('choices').innerHTML = `<button onclick="location.reload()">Restart</button>`;
+    overlay.style.display = "flex";
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw Lanes
+    ctx.strokeStyle = "#333";
+    for(let i=1; i<LANES; i++) {
+        ctx.beginPath(); ctx.moveTo(i*LANE_WIDTH, 0); ctx.lineTo(i*LANE_WIDTH, canvas.height); ctx.stroke();
+    }
+
+    // Draw Player
+    ctx.font = player.state === "JUMPING" ? "60px serif" : (player.state === "SLIDING" ? "30px serif" : "50px serif");
+    ctx.textAlign = "center";
+    
+    // Draw Aura
+    ctx.beginPath();
+    ctx.arc(player.lane * LANE_WIDTH + LANE_WIDTH/2, player.y, player.auraSize, 0, Math.PI*2);
+    ctx.fillStyle = "rgba(255, 0, 0, 0.2)";
+    ctx.fill();
+
+    ctx.fillText("🏃", player.lane * LANE_WIDTH + LANE_WIDTH/2, player.y + 15);
+
+    // Draw Enemies & Pickups
+    ctx.font = "40px serif";
+    enemies.forEach(en => ctx.fillText(en.emoji, en.lane * LANE_WIDTH + LANE_WIDTH/2, en.y));
+    pickups.forEach(p => ctx.fillText(p.emoji, p.lane * LANE_WIDTH + LANE_WIDTH/2, p.y));
+
+    document.getElementById('score-val').innerText = score;
+    requestAnimationFrame(() => { update(); draw(); });
+}
+
+draw();
+</script>
 </body>
 </html>
