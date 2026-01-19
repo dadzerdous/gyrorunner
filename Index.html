@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gyro Runner</title>
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        #overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+                   color: white; text-align: center; background: rgba(0,0,0,0.8); padding: 20px; border-radius: 10px; }
+        button { padding: 10px 20px; font-size: 18px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div id="overlay">
+        <h1>Gyro Runner</h1>
+        <p>Rotate your phone to steer</p>
+        <button id="startBtn">Start Game</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'https://cdn.skypack.dev/three@0.136.0';
+
+        let scene, camera, renderer, player, tilt = 0;
+        let obstacles = [];
+        const speed = 0.2;
+
+        function init() {
+            // Scene Setup
+            scene = new THREE.Scene();
+            scene.fog = new THREE.Fog(0x000000, 10, 50);
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // Lighting
+            const light = new THREE.DirectionalLight(0xffffff, 1);
+            light.position.set(0, 10, 5);
+            scene.add(light);
+            scene.add(new THREE.AmbientLight(0x404040));
+
+            // Player (The Runner)
+            const geometry = new THREE.BoxGeometry(1, 1, 1);
+            const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+            player = new THREE.Mesh(geometry, material);
+            scene.add(player);
+
+            // Camera Position (Top-Down/Behind)
+            camera.position.set(0, 10, 5);
+            camera.lookAt(player.position);
+
+            // Start Animation
+            animate();
+            spawnObstacles();
+        }
+
+        function spawnObstacles() {
+            setInterval(() => {
+                const geom = new THREE.BoxGeometry(1, 1, 1);
+                const mat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+                const obs = new THREE.Mesh(geom, mat);
+                obs.position.set(Math.random() * 10 - 5, 0, -50);
+                scene.add(obs);
+                obstacles.push(obs);
+            }, 500);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Move Player based on tilt
+            player.position.x += tilt * 0.05;
+            player.position.x = Math.max(-5, Math.min(5, player.position.x)); // Bounds
+
+            // Move Obstacles toward player
+            obstacles.forEach((obs, index) => {
+                obs.position.z += speed;
+                if (obs.position.z > 5) {
+                    scene.remove(obs);
+                    obstacles.splice(index, 1);
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        // --- SENSOR LOGIC ---
+        document.getElementById('startBtn').addEventListener('click', () => {
+            document.getElementById('overlay').style.display = 'none';
+            
+            // Request permission for iOS 13+ 
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            window.addEventListener('deviceorientation', handleOrientation);
+                        }
+                    });
+            } else {
+                window.addEventListener('deviceorientation', handleOrientation);
+            }
+            init();
+        });
+
+        function handleOrientation(event) {
+            // Gamma is left-to-right tilt in degrees
+            tilt = event.gamma / 10; 
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
