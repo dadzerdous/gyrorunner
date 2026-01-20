@@ -42,6 +42,42 @@ function spawnWave(waveNum) {
     document.getElementById('room-menu').style.display = 'none';
 }
 
+function showMysteryEvent() {
+    gameState = 'MAP';
+    const menu = document.getElementById('room-menu');
+    const container = document.getElementById('room-choices');
+    menu.style.display = 'flex';
+
+    const events = [
+        { 
+            t: "The Sanguine Altar", 
+            d: "A stone bowl filled with dark liquid glows. Do you drink?", 
+            choices: [
+                { n: "Drink ( +2 Max HP, -10% Speed )", act: () => { player.maxHp += 2; player.hp += 2; player.speed *= 0.9; } },
+                { n: "Ignore", act: () => {} }
+            ]
+        },
+        { 
+            t: "Old Grave", 
+            d: "You find a rusted shield on a skeleton. Take it?", 
+            choices: [
+                { n: "Take ( +2 Armor )", act: () => { player.armor += 2; } },
+                { n: "Leave it", act: () => {} }
+            ]
+        }
+    ];
+
+    const event = events[Math.floor(Math.random() * events.length)];
+    container.innerHTML = `<h3>${event.t}</h3><p>${event.d}</p>`;
+
+    event.choices.forEach(c => {
+        const btn = document.createElement('button');
+        btn.innerText = c.n;
+        btn.onclick = () => { c.act(); showRoomSelection(); }; // Go back to map after choice
+        container.appendChild(btn);
+    });
+}
+
 function showRoomSelection() {
     gameState = 'MAP';
     const menu = document.getElementById('room-menu');
