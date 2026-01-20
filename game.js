@@ -19,7 +19,43 @@ const spireMap = new MapSystem(15);
 let gameState = 'WAVE';
 let arenaSize = 450;
 let gems = [], shockwaves = [];
+let hazards = [];
 
+function generateHazards() {
+    hazards = [];
+    const numHazards = 8;
+    for (let i = 0; i < numHazards; i++) {
+        hazards.push({
+            // Align to the 50px grid squares
+            x: (Math.floor(Math.random() * (arenaSize * 2 / 50)) * 50) - arenaSize,
+            y: (Math.floor(Math.random() * (arenaSize * 2 / 50)) * 50) - arenaSize,
+            type: Math.random() > 0.5 ? 'BARRIER' : 'TRAP'
+        });
+    }
+}
+window.selectElement = (type) => {
+    player.element = type;
+    if (type === 'fire') { 
+        player.weapons[0].damage = 4; 
+        player.weapons[0].color = 'orange'; 
+    }
+    if (type === 'water') { 
+        player.maxHp = 20; player.hp = 20; 
+        player.weapons[0].color = 'cyan'; 
+    }
+    if (type === 'earth') { 
+        player.speed = 2.5; player.armor = 2; 
+        player.weapons[0].color = '#8B4513'; 
+    }
+    if (type === 'wind') { 
+        player.speed = 5; player.weapons[0].fireRate = 500; 
+        player.weapons[0].color = '#ADFF2F'; 
+    }
+    
+    document.getElementById('char-select').style.display = 'none';
+    generateHazards(); 
+    gameState = 'WAVE'; 
+};
 // Simplified: We don't spawn enemies locally anymore; the server does
 function startWaveUI() {
     gameState = 'WAVE';
@@ -37,10 +73,26 @@ function update(time) {
 
     const move = input.getMovement();
     player.currentDir = move;
+    
+    // Preliminary move
     player.x += move.x * player.speed;
     player.y += move.y * player.speed;
 
-    // Send position to server so others see you
+    // --- HAZARD COLLISIONS ---
+    hazards.forEach(h => {
+        // Check if player is inside the 50x50 grid square of the hazard
+        if (player.x > h.x && player.x < h.x + 50 && player.y > h.y && player.y < h.y + 50) {
+            if (h.type === 'BARRIER') {
+                // If it's a barrier, push the player back (prevent movement)
+                player.x -= move.x * player.speed;
+                player.y -= move.y * player.speed;
+            } else if (h.type === 'TRAP' && !player.isJumping) {
+                // If it's a trap, take damage over time
+                player.hp -= 0.08; 
+            }
+        }
+    });
+
     sendMove(player.x, player.y);
 
     player.x = Math.max(-arenaSize, Math.min(arenaSize, player.x));
@@ -54,10 +106,8 @@ function update(time) {
         }
     }
 
-    // Use remoteEnemies for weapon targeting and projectile hits
     combat.updateWeapons(player, remoteEnemies, time);
     
-    // Manual Projectile Update to include sendHit
     for (let i = combat.projectiles.length - 1; i >= 0; i--) {
         let p = combat.projectiles[i];
         p.x += p.vx;
@@ -65,7 +115,7 @@ function update(time) {
 
         remoteEnemies.forEach(en => {
             if (Math.hypot(p.x - en.x, p.y - en.y) < 25) {
-                sendHit(en.id, p.damage); // Tell server which specific monster was hit
+                sendHit(en.id, p.damage);
                 combat.projectiles.splice(i, 1);
             }
         });
@@ -75,7 +125,6 @@ function update(time) {
         }
     }
 
-    // Local damage check: if a server enemy is too close, you take damage
     remoteEnemies.forEach(en => {
         const d = Math.hypot(player.x - en.x, player.y - en.y);
         if (d < 25 && !player.isJumping) player.hp -= 0.05;
@@ -95,41 +144,50 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(i, -arenaSize); ctx.lineTo(i, arenaSize); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(-arenaSize, i); ctx.lineTo(arenaSize, i); ctx.stroke();
     }
+
+    // --- DRAW HAZARDS ---
+    hazards.forEach(h => {
+        if (h.type === 'BARRIER') {
+            ctx.fillStyle = '#3a3a4d'; // Dark stone color
+            ctx.fillRect(h.x + 2, h.y + 2, 46, 46); // Slightly smaller for border look
+            ctx.strokeStyle = '#555';
+            ctx.strokeRect(h.x + 2, h.y + 2, 46, 46);
+        } else if (h.type === 'TRAP') {
+            ctx.fillStyle = 'rgba(255, 68, 0, 0.3)'; // Glowing lava
+            ctx.fillRect(h.x, h.y, 50, 50);
+            ctx.font = '20px serif';
+            ctx.fillText('🔥', h.x + 25, h.y + 35);
+        }
+    });
+
     ctx.strokeStyle = '#ff0044'; 
     ctx.strokeRect(-arenaSize, -arenaSize, arenaSize * 2, arenaSize * 2);
 
-    // Draw Synced Enemies and Health Bars
     remoteEnemies.forEach(en => {
         ctx.font = '28px serif';
         ctx.textAlign = 'center';
         ctx.fillText(en.type === 'archer' ? '🏹' : '🧟', en.x, en.y + 10);
-        
-        // Health Bar
         ctx.fillStyle = 'red';
         ctx.fillRect(en.x - 15, en.y - 25, 30 * (en.hp / 3), 4);
     });
 
-    // Projectiles
     combat.projectiles.forEach(p => {
         ctx.fillStyle = p.color || '#ffffff';
         ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
     });
 
-    // Other Players
     Object.entries(remotePlayers).forEach(([id, p]) => {
         if (!myId || id === myId) return; 
         ctx.font = "28px serif";
         ctx.fillText("🧙", p.x, p.y + 10);
     });
 
-    // Local Player
     let scale = player.isJumping ? 1.6 : 1;
     ctx.font = (32 * scale) + 'px serif';
     ctx.fillText('🧛', player.x, player.y + 12);
 
     ctx.restore();
 
-    // HUD
     ctx.fillStyle = '#00ffcc'; 
     ctx.font = "bold 20px 'Courier New', monospace";
     ctx.fillText(`HP: ${Math.max(0, Math.ceil(player.hp))} | Gems: ${player.gems || 0}`, 20, 40);
