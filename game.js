@@ -1,12 +1,11 @@
 import { connectNet, sendMove, remotePlayers, myId } from "./net.js";
-
-connectNet();
-
-
 import { Player, Enemy } from './entities.js';
 import { InputHandler } from './input.js';
 import { CombatSystem, AbilitySystem } from './systems.js';
 import { MapSystem } from './map.js';
+
+connectNet();
+
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
