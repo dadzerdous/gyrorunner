@@ -89,6 +89,11 @@ window.startNextWave = (type) => {
 
 function update(time) {
     if (gameState !== 'WAVE') return;
+    
+    // --- 1. COOLDOWN MANAGEMENT ---
+    // This reduces the cooldown timer by 1 every frame (approx 60 per second)
+    if (player.skills.jump.cooldown > 0) player.skills.jump.cooldown--;
+    if (player.skills.dash.cooldown > 0) player.skills.dash.cooldown--;
 
     // 1. Inputs & Skills
     const cmd = input.consumeCommand();
