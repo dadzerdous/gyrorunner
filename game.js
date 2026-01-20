@@ -74,7 +74,8 @@ player.x += move.x * player.speed;
 player.y += move.y * player.speed;
 
 // send movement to server
-sendMove(move.x * player.speed, move.y * player.speed);
+sendMove(player.x, player.y);
+
 
 
     // SOLID BARRIER BLOCK
