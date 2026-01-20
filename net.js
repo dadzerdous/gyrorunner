@@ -1,8 +1,9 @@
+// net.js
 const WS_URL = "wss://gyrorunner-server.onrender.com";
 
 let ws = null;
 export let remotePlayers = {};
-export let myId = null;
+export let myId = null; // Ensure this is exported
 
 export function connectNet() {
   ws = new WebSocket(WS_URL);
@@ -15,7 +16,7 @@ export function connectNet() {
     const msg = JSON.parse(e.data);
 
     if (msg.type === "welcome") {
-      myId = msg.id;
+      myId = msg.id; // This updates the exported binding
       console.log("[net] my id:", myId);
     }
 
