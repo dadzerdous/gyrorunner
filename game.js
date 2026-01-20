@@ -1,4 +1,4 @@
-import { connectNet, sendMove, remotePlayers, myId } from "./net.js";
+import { connectNet, sendMove, remoteEnemies, remotePlayers, myId } from "./net.js";
 import { Player, Enemy } from './entities.js';
 import { InputHandler } from './input.js';
 import { CombatSystem, AbilitySystem } from './systems.js';
