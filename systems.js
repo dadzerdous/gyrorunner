@@ -6,31 +6,11 @@
 export class CombatSystem {
     constructor() {
         this.projectiles = [];
-        this.particles = [];
     }
 
     /**
-     * Checks if the player has multiple weapons of the same element 
-     * to merge them into a high-tier "Tower"
+     * Handles weapons auto-firing based on their individual fireRates
      */
-    checkEvolutions(player) {
-        const fireWeapons = player.weapons.filter(w => w.element === 'fire');
-        if (fireWeapons.length >= 2) {
-            // Merge them into an Inferno Tower
-            player.weapons = player.weapons.filter(w => w.element !== 'fire');
-            player.weapons.push({
-                name: "Inferno Tower",
-                damage: 10,
-                fireRate: 2000,
-                lastShot: 0,
-                element: 'fire',
-                isStatic: true // This weapon represents a stationary growth
-            });
-            console.log("Evolution! Inferno Tower created.");
-        }
-    }
-
-    // Handles weapons auto-firing based on their individual fireRates
     updateWeapons(player, enemies, currentTime) {
         player.weapons.forEach(weapon => {
             if (currentTime - weapon.lastShot > weapon.fireRate && enemies.length > 0) {
@@ -50,7 +30,7 @@ export class CombatSystem {
                         vy: ((nearest.y - player.y) / dist) * 10,
                         damage: weapon.damage,
                         element: weapon.element,
-                        color: this.getElementColor(weapon.element)
+                        color: weapon.element === 'fire' ? 'orange' : 'white' // Simplified elemental color
                     });
                     weapon.lastShot = currentTime;
                 }
@@ -58,17 +38,9 @@ export class CombatSystem {
         });
     }
 
-    // Assigns colors based on elemental properties
-    getElementColor(element) {
-        switch(element) {
-            case 'fire': return '#ff4500'; // Orange-Red
-            case 'ice': return '#00ffff';  // Cyan
-            case 'volt': return '#ffff00'; // Yellow
-            default: return '#ffffff';     // White (Blood Bolt)
-        }
-    }
-
-    // Updates projectile positions and checks for enemy hits
+    /**
+     * Updates projectile positions and checks for enemy hits
+     */
     updateProjectiles(enemies, arenaSize) {
         for (let i = this.projectiles.length - 1; i >= 0; i--) {
             let p = this.projectiles[i];
@@ -76,34 +48,17 @@ export class CombatSystem {
             p.y += p.vy;
 
             // Collision detection with enemies
-            for (let j = enemies.length - 1; j >= 0; j--) {
-                let en = enemies[j];
+            enemies.forEach(en => {
                 if (Math.hypot(p.x - en.x, p.y - en.y) < 25) {
-                    this.applyDamage(en, p.damage, p.element);
+                    en.hp -= p.damage; // Apply damage
                     this.projectiles.splice(i, 1);
-                    break;
                 }
-            }
+            });
 
             // Remove projectiles that go way outside the arena
-            if (p && (Math.abs(p.x) > arenaSize * 1.5 || Math.abs(p.y) > arenaSize * 1.5)) {
+            if (p && Math.abs(p.x) > arenaSize + 100) {
                 this.projectiles.splice(i, 1);
             }
-        }
-    }
-
-    // Applies damage and status effect logic
-    applyDamage(enemy, dmg, element) {
-        enemy.hp -= dmg;
-        
-        // Element Logic: Ice slows movement speed
-        if (element === 'ice') {
-            enemy.speed *= 0.8;
-        }
-        
-        // Element Logic: Fire marks for future tick damage (Burning)
-        if (element === 'fire') {
-            enemy.isBurning = true;
         }
     }
 }
@@ -112,40 +67,26 @@ export class CombatSystem {
  * Resolves Action Commands (Swipes/Keys) into Player Abilities
  */
 export class AbilitySystem {
-    static resolveCommand(command, player, shockwaves) {
+    /**
+     * Maps inputs to specific skill triggers
+     */
+    static resolveCommand(command, player) {
         if (!command) return;
 
-        // Map Swipe Commands to specific Skills
+        // Jump logic: invincible while in air
         if (command === 'UP_SWIPE' && player.skills.jump.unlocked && player.skills.jump.cooldown <= 0) {
-            this.executeJump(player);
+            player.isJumping = true;
+            player.jumpTime = 35; 
+            player.skills.jump.cooldown = player.skills.jump.maxCD;
         }
         
+        // Dash logic: Burst in current movement direction
         if (command === 'RIGHT_SWIPE' && player.skills.dash.unlocked && player.skills.dash.cooldown <= 0) {
-            this.executeDash(player);
+            const dx = player.currentDir.x || 1;
+            const dy = player.currentDir.y || 0;
+            player.x += dx * 130; 
+            player.y += dy * 130;
+            player.skills.dash.cooldown = player.skills.dash.maxCD;
         }
-    }
-
-    static executeJump(player) {
-        player.isJumping = true;
-        player.jumpTime = 30; // Length of the jump in frames
-        player.skills.jump.cooldown = player.skills.jump.maxCD;
-        console.log("Player Jump Triggered");
-    }
-
-static executeDash(player) {
-        const dashPower = 120;
-        // Check if player is moving, otherwise dash forward (right)
-        const dirX = player.currentDir?.x || 1;
-        const dirY = player.currentDir?.y || 0;
-        
-        // If standing still, dash in a default direction (right)
-        const finalX = (dirX === 0 && dirY === 0) ? 1 : dirX;
-        const finalY = dirY;
-
-        player.x += finalX * dashPower;
-        player.y += finalY * dashPower;
-        
-        player.skills.dash.cooldown = player.skills.dash.maxCD;
-        console.log("Player Dash Triggered");
     }
 }
