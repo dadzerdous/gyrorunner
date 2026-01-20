@@ -99,12 +99,14 @@ function update(time) {
     const cmd = input.consumeCommand();
     AbilitySystem.resolveCommand(cmd, player, shockwaves);
 
-    // 2. Movement
-const move = input.getMovement();
-player.x += move.x * player.speed;
-player.y += move.y * player.speed;
-    player.x = Math.max(-arenaSize, Math.min(arenaSize, player.x));
-    player.y = Math.max(-arenaSize, Math.min(arenaSize, player.y));
+// 2. Movement
+    const move = input.getMovement();
+    
+    // Store current movement on the player so AbilitySystem can see it
+    player.currentDir = { x: move.x, y: move.y }; 
+
+    player.x += move.x * player.speed;
+    player.y += move.y * player.speed;
 
     // 3. Jump Logic
     if (player.isJumping) {
