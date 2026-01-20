@@ -176,10 +176,13 @@ function draw() {
     ctx.font = (32 * scale) + 'px serif';
     ctx.fillText('🧛', player.x, player.y + 12);
 
-    ctx.font = "28px serif";
-Object.values(remotePlayers).forEach(p => {
+Object.entries(remotePlayers).forEach(([id, p]) => {
+  if (id === myId) return; // ← hide your own server echo
+
+  ctx.font = "28px serif";
   ctx.fillText("🧙", p.x, p.y + 10);
 });
+
 
     ctx.restore();
 
