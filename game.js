@@ -15,40 +15,39 @@ const combat = new CombatSystem();
 // --- GAME STATE ---
 let gameState = 'WAVE'; // WAVE, UPGRADE, MAP
 let currentWave = 1;
-let arenaSize = 450;
+let arenaSize = 400;
 let enemies = [];
 let gems = [];
 let shockwaves = [];
-let enemyBullets = [];
-
-// --- UI ELEMENTS ---
-const hud = document.getElementById('hud');
-const upgradeMenu = document.getElementById('upgrade-menu');
-const roomMenu = document.getElementById('room-menu');
 
 // --- CORE FUNCTIONS ---
 
 function spawnWave(waveNum) {
     enemies = [];
-    // Ratio: 5 Goblins (Melee) to 1 Archer (Ranged)
+    gems = [];
+    shockwaves = [];
+    combat.projectiles = []; // Clear old bullets
+    
+    // Ratio: ~5 Goblins to 1 Archer
     const count = 5 + (waveNum * 3);
     for (let i = 0; i < count; i++) {
         const type = (i % 6 === 0) ? 'archer' : 'goblin';
         enemies.push(new Enemy(type, arenaSize));
     }
     gameState = 'WAVE';
+    document.getElementById('upgrade-menu').style.display = 'none';
+    document.getElementById('room-menu').style.display = 'none';
 }
 
 function handleCollisions() {
-    // Enemy-Player Collision
     enemies.forEach(en => {
         const d = Math.hypot(en.x - player.x, en.y - player.y);
         if (d < 30 && !player.isJumping) {
-            player.hp -= 0.05; // Continuous damage or use invulnTimer logic
+            player.hp -= 0.02; // Simple tick damage
+            if (player.hp <= 0) location.reload(); 
         }
     });
 
-    // Gem Collection
     for (let i = gems.length - 1; i >= 0; i--) {
         const g = gems[i];
         const d = Math.hypot(g.x - player.x, g.y - player.y);
@@ -63,22 +62,67 @@ function handleCollisions() {
     }
 }
 
+// --- DRAWING ---
+function draw() {
+    ctx.fillStyle = '#050208';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    ctx.translate(canvas.width / 2 - player.x, canvas.height / 2 - player.y);
+
+    // Arena Floor
+    ctx.strokeStyle = '#221133';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-arenaSize, -arenaSize, arenaSize * 2, arenaSize * 2);
+
+    // Gems
+    ctx.font = '16px serif';
+    gems.forEach(g => ctx.fillText('💎', g.x - 8, g.y + 8));
+
+    // Enemies
+    enemies.forEach(en => {
+        ctx.font = '24px serif';
+        ctx.fillText(en.type === 'archer' ? '🏹' : '🧟', en.x - 12, en.y + 12);
+    });
+
+    // Bullets
+    combat.projectiles.forEach(p => {
+        ctx.fillStyle = p.color || 'white';
+        ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
+    });
+
+    // Shockwaves
+    shockwaves.forEach(sw => {
+        ctx.strokeStyle = `rgba(0, 255, 204, ${sw.op})`;
+        ctx.beginPath(); ctx.arc(sw.x, sw.y, sw.r, 0, Math.PI * 2); ctx.stroke();
+    });
+
+    // Player
+    let scale = player.isJumping ? 1.6 : 1;
+    ctx.font = (30 * scale) + 'px serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('🧛', player.x, player.y + 10);
+
+    ctx.restore();
+
+    // HUD (Simple Overlay)
+    ctx.fillStyle = "white";
+    ctx.font = "18px Arial";
+    ctx.fillText(`Wave: ${currentWave} | HP: ${Math.ceil(player.hp)} | XP: ${player.xp}`, 20, 30);
+}
+
+// --- UPDATE LOOP ---
 function update(time) {
     if (gameState !== 'WAVE') return;
 
-    // 1. Process Skills (Action Commands)
     const cmd = input.consumeCommand();
     AbilitySystem.resolveCommand(cmd, player, shockwaves);
 
-    // 2. Move Player (Joystick/WASD)
     player.x += input.moveDir.x * player.speed;
     player.y += input.moveDir.y * player.speed;
-    
-    // Arena Constraint
     player.x = Math.max(-arenaSize, Math.min(arenaSize, player.x));
     player.y = Math.max(-arenaSize, Math.min(arenaSize, player.y));
 
-    // 3. Jump Logic (Gravity Simulation)
     if (player.isJumping) {
         player.jumpTime--;
         if (player.jumpTime === 0) {
@@ -87,13 +131,10 @@ function update(time) {
         }
     }
 
-    // 4. Update Combat Systems
     combat.updateWeapons(player, enemies, time);
     combat.updateProjectiles(enemies, arenaSize);
 
-    // 5. Update Entities
     enemies.forEach(en => {
-        // Simple logic here or move to a separate controller
         const dx = player.x - en.x;
         const dy = player.y - en.y;
         const d = Math.hypot(dx, dy);
@@ -101,87 +142,45 @@ function update(time) {
         en.y += (dy / d) * en.speed;
     });
 
-    // 6. Manage Shockwaves
     shockwaves.forEach((sw, i) => {
-        sw.r += 5; sw.op -= 0.02;
-        enemies.forEach((en, ei) => {
-            if (Math.abs(Math.hypot(en.x - sw.x, en.y - sw.y) - sw.r) < 20) {
-                en.hp -= 10; // High stomp damage
-            }
+        sw.r += 6; sw.op -= 0.03;
+        enemies.forEach(en => {
+            if (Math.abs(Math.hypot(en.x - sw.x, en.y - sw.y) - sw.r) < 20) en.hp -= 5;
         });
         if (sw.op <= 0) shockwaves.splice(i, 1);
     });
 
-    // 7. Cleanup & XP Spawn
     enemies = enemies.filter(en => {
-        if (en.hp <= 0) {
-            gems.push({ x: en.x, y: en.y });
-            return false;
-        }
+        if (en.hp <= 0) { gems.push({ x: en.x, y: en.y }); return false; }
         return true;
     });
 
     handleCollisions();
 
-    // 8. End Wave Condition
-    if (enemies.length === 0 && currentWave > 0) {
-        transitionToUpgrade();
+    if (enemies.length === 0) {
+        showRoomSelection();
     }
 }
 
-function transitionToUpgrade() {
-    gameState = 'UPGRADE';
-    document.getElementById('upgrade-menu').style.display = 'flex';
-    // Logic to generate 3 random cards based on player.xp
+function showRoomSelection() {
+    gameState = 'MAP';
+    const menu = document.getElementById('room-menu');
+    menu.style.display = 'flex';
+    menu.innerHTML = `
+        <h2 style="color:red">CHOOSE YOUR PATH</h2>
+        <button onclick="window.startNextWave('Standard')">Standard Wave (More XP)</button>
+        <button onclick="window.startNextWave('Elite')">Elite Room (New Weapon)</button>
+    `;
 }
 
-function draw() {
-    ctx.fillStyle = '#050208';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    ctx.save();
-    ctx.translate(canvas.width / 2 - player.x, canvas.height / 2 - player.y);
-
-    // Draw Arena
-    ctx.strokeStyle = '#331144';
-    ctx.lineWidth = 5;
-    ctx.strokeRect(-arenaSize, -arenaSize, arenaSize * 2, arenaSize * 2);
-
-    // Draw Gems
-    ctx.font = '16px serif';
-    gems.forEach(g => ctx.fillText('💎', g.x - 8, g.y + 8));
-
-    // Draw Enemies
-    enemies.forEach(en => {
-        ctx.font = '24px serif';
-        ctx.fillText(en.type === 'archer' ? '🏹' : '🧟', en.x - 12, en.y + 12);
-    });
-
-    // Draw Projectiles
-    combat.projectiles.forEach(p => {
-        ctx.fillStyle = p.color;
-        ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
-    });
-
-    // Draw Shockwaves
-    shockwaves.forEach(sw => {
-        ctx.strokeStyle = `rgba(0, 255, 204, ${sw.op})`;
-        ctx.beginPath(); ctx.arc(sw.x, sw.y, sw.r, 0, Math.PI * 2); ctx.stroke();
-    });
-
-    // Draw Player
-    let scale = player.isJumping ? 1.5 : 1;
-    ctx.font = (30 * scale) + 'px serif';
-    ctx.fillText('🧛', player.x - 15, player.y + 15);
-
-    ctx.restore();
-
-    // Joystick UI
-    if (input.joystickActive) {
-        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-        ctx.strokeRect(input.touchStart.x - 25, input.touchStart.y - 25, 50, 50);
+// Global helper for the buttons
+window.startNextWave = (type) => {
+    currentWave++;
+    if (type === 'Elite') {
+        player.weapons.push({ name: "Fire Dagger", damage: 4, fireRate: 1500, lastShot: 0, element: "fire" });
     }
-}
+    spawnWave(currentWave);
+};
 
 function ticker(time) {
     update(time);
@@ -189,6 +188,6 @@ function ticker(time) {
     requestAnimationFrame(ticker);
 }
 
-// Start Game
+// Initial Spawn
 spawnWave(currentWave);
 requestAnimationFrame(ticker);
