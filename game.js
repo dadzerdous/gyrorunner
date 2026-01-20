@@ -116,6 +116,11 @@ window.startNextWave = (type) => {
         return;
     }
     
+    if (type === 'Mystery') {
+        showMysteryEvent();
+        return;
+    }
+    
     currentWave++;
     arenaSize = (type === 'Elite') ? 350 : 450;
     spawnWave(currentWave);
