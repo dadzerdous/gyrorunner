@@ -132,15 +132,18 @@ export class AbilitySystem {
         console.log("Player Jump Triggered");
     }
 
-    static executeDash(player) {
-        // Dash logic: Quick burst in the current movement direction
+static executeDash(player) {
         const dashPower = 120;
-        // Uses moveDir from input if available, otherwise defaults right
-        const dirX = player.moveDir?.x || 1;
-        const dirY = player.moveDir?.y || 0;
+        // Check if player is moving, otherwise dash forward (right)
+        const dirX = player.currentDir?.x || 1;
+        const dirY = player.currentDir?.y || 0;
         
-        player.x += dirX * dashPower;
-        player.y += dirY * dashPower;
+        // If standing still, dash in a default direction (right)
+        const finalX = (dirX === 0 && dirY === 0) ? 1 : dirX;
+        const finalY = dirY;
+
+        player.x += finalX * dashPower;
+        player.y += finalY * dashPower;
         
         player.skills.dash.cooldown = player.skills.dash.maxCD;
         console.log("Player Dash Triggered");
