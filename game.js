@@ -3,79 +3,27 @@ import { InputHandler } from './input.js';
 import { CombatSystem, AbilitySystem } from './systems.js';
 import { MapSystem } from './map.js';
 
-// --- INITIALIZATION ---
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+canvas.width = window.innerWidth; canvas.height = window.innerHeight;
 
 const input = new InputHandler();
 const player = new Player();
 const combat = new CombatSystem();
 const spireMap = new MapSystem(15);
 
-// --- GAME STATE ---
-let gameState = 'WAVE'; // WAVE, UPGRADE, MAP
-let currentWave = 1;
+let gameState = 'WAVE';
 let arenaSize = 450;
-let enemies = [];
-let gems = [];
-let shockwaves = [];
-
-// --- WAVE & ROOM LOGIC ---
+let enemies = [], gems = [], shockwaves = [];
 
 function spawnWave(waveNum) {
-    enemies = [];
-    gems = [];
-    shockwaves = [];
-    combat.projectiles = [];
-    
-    // 5 Goblins to 1 Archer ratio
-    const count = 5 + (waveNum * 3);
+    enemies = []; gems = []; shockwaves = [];
+    const count = 5 + (waveNum * 2);
     for (let i = 0; i < count; i++) {
-        const type = (i % 6 === 0) ? 'archer' : 'goblin';
-        enemies.push(new Enemy(type, arenaSize));
+        enemies.push(new Enemy(i % 7 === 0 ? 'archer' : 'goblin', arenaSize));
     }
-    
     gameState = 'WAVE';
-    document.getElementById('upgrade-menu').style.display = 'none';
     document.getElementById('room-menu').style.display = 'none';
-}
-
-function showMysteryEvent() {
-    gameState = 'MAP';
-    const menu = document.getElementById('room-menu');
-    const container = document.getElementById('room-choices');
-    menu.style.display = 'flex';
-
-    const events = [
-        { 
-            t: "The Sanguine Altar", 
-            d: "A stone bowl filled with dark liquid glows. Do you drink?", 
-            choices: [
-                { n: "Drink ( +2 Max HP, -10% Speed )", act: () => { player.maxHp += 2; player.hp += 2; player.speed *= 0.9; } },
-                { n: "Ignore", act: () => {} }
-            ]
-        },
-        { 
-            t: "Old Grave", 
-            d: "You find a rusted shield on a skeleton. Take it?", 
-            choices: [
-                { n: "Take ( +2 Armor )", act: () => { player.armor += 2; } },
-                { n: "Leave it", act: () => {} }
-            ]
-        }
-    ];
-
-    const event = events[Math.floor(Math.random() * events.length)];
-    container.innerHTML = `<h3>${event.t}</h3><p>${event.d}</p>`;
-
-    event.choices.forEach(c => {
-        const btn = document.createElement('button');
-        btn.innerText = c.n;
-        btn.onclick = () => { c.act(); showRoomSelection(); }; // Go back to map after choice
-        container.appendChild(btn);
-    });
 }
 
 function showRoomSelection() {
@@ -83,151 +31,102 @@ function showRoomSelection() {
     const menu = document.getElementById('room-menu');
     const container = document.getElementById('room-choices');
     menu.style.display = 'flex';
+    container.innerHTML = "";
     
-    const options = spireMap.getNextOptions();
-    container.innerHTML = ""; // Clear old buttons
-    
-    options.forEach(type => {
+    spireMap.getNextOptions().forEach(type => {
         const btn = document.createElement('button');
-        btn.style.margin = "10px";
-        btn.style.padding = "10px";
-        btn.innerHTML = `${getRoomIcon(type)} ${type}`;
+        btn.innerHTML = type;
         btn.onclick = () => window.startNextWave(type);
         container.appendChild(btn);
     });
 }
 
-function getRoomIcon(type) {
-    switch(type) {
-        case 'Combat': return '⚔️';
-        case 'Elite': return '💀';
-        case 'Rest': return '🩸';
-        case 'Mystery': return '❓';
-        case 'Boss': return '👑';
-        default: return '🚪';
-    }
-}
-
-// Global helper for menu buttons
 window.startNextWave = (type) => {
-    if (type === 'Rest') {
-        player.hp = Math.min(player.maxHp, player.hp + 4);
-        showRoomSelection(); 
-        return;
-    }
-    
-    if (type === 'Mystery') {
-        showMysteryEvent();
-        return;
-    }
-    
-    currentWave++;
-    arenaSize = (type === 'Elite') ? 350 : 450;
-    spawnWave(currentWave);
+    if (type === 'Rest') { player.hp = Math.min(player.maxHp, player.hp + 5); showRoomSelection(); return; }
+    if (type === 'Mystery') { triggerMystery(); return; }
+    spawnWave(spireMap.currentFloorIndex + 1);
 };
 
-// --- CORE LOOP ---
+function triggerMystery() {
+    // Permanent stat buff example
+    player.maxHp += 2; player.hp += 2;
+    alert("Mystery Ritual: +2 Max HP!");
+    showRoomSelection();
+}
 
 function update(time) {
     if (gameState !== 'WAVE') return;
-    
-    // --- 1. COOLDOWN MANAGEMENT ---
-    // This reduces the cooldown timer by 1 every frame (approx 60 per second)
+
     if (player.skills.jump.cooldown > 0) player.skills.jump.cooldown--;
     if (player.skills.dash.cooldown > 0) player.skills.dash.cooldown--;
 
-    // 1. Inputs & Skills
     const cmd = input.consumeCommand();
-    AbilitySystem.resolveCommand(cmd, player, shockwaves);
+    AbilitySystem.resolveCommand(cmd, player);
 
-// 2. Movement
     const move = input.getMovement();
-    
-    // Store current movement on the player so AbilitySystem can see it
-    player.currentDir = { x: move.x, y: move.y }; 
-
+    player.currentDir = move;
     player.x += move.x * player.speed;
     player.y += move.y * player.speed;
 
-    // 3. Jump Logic
+    // SOLID BARRIER BLOCK
+    player.x = Math.max(-arenaSize, Math.min(arenaSize, player.x));
+    player.y = Math.max(-arenaSize, Math.min(arenaSize, player.y));
+
     if (player.isJumping) {
         player.jumpTime--;
-        if (player.jumpTime === 0) {
-            player.isJumping = false;
-            shockwaves.push({ x: player.x, y: player.y, r: 10, op: 1 });
-        }
+        if (player.jumpTime === 0) { player.isJumping = false; shockwaves.push({ x: player.x, y: player.y, r: 10, op: 1 }); }
     }
 
-    // 4. Combat & Enemies
     combat.updateWeapons(player, enemies, time);
     combat.updateProjectiles(enemies, arenaSize);
 
     enemies.forEach(en => {
-        const dx = player.x - en.x;
-        const dy = player.y - en.y;
-        const d = Math.hypot(dx, dy);
-        en.x += (dx / d) * en.speed;
-        en.y += (dy / d) * en.speed;
-
-        // Player damage
-        if (d < 25 && !player.isJumping) {
-            player.hp -= 0.01; 
-            if (player.hp <= 0) location.reload();
-        }
+        const d = Math.hypot(player.x - en.x, player.y - en.y);
+        en.x += ((player.x - en.x)/d) * en.speed;
+        en.y += ((player.y - en.y)/d) * en.speed;
+        if (d < 25 && !player.isJumping) player.hp -= 0.01;
     });
 
-    // 5. Cleanup & XP
     enemies = enemies.filter(en => {
         if (en.hp <= 0) { gems.push({ x: en.x, y: en.y }); return false; }
         return true;
     });
 
+    for (let i = gems.length - 1; i >= 0; i--) {
+        const g = gems[i];
+        const d = Math.hypot(g.x - player.x, g.y - player.y);
+        if (d < 150) { g.x += (player.x - g.x)*0.1; g.y += (player.y - g.y)*0.1; }
+        if (d < 20) { player.gems++; gems.splice(i, 1); }
+    }
+
     if (enemies.length === 0) showRoomSelection();
 }
 
 function draw() {
-    ctx.fillStyle = '#050208';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
+    ctx.fillStyle = '#050208'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.save();
-    ctx.translate(canvas.width / 2 - player.x, canvas.height / 2 - player.y);
+    ctx.translate(canvas.width/2 - player.x, canvas.height/2 - player.y);
 
-    // Arena
-    ctx.strokeStyle = '#331144';
+    // Grid Floor (Visual Barrier Reference)
+    ctx.strokeStyle = '#150a24';
+    for(let i = -arenaSize; i <= arenaSize; i += 50) {
+        ctx.beginPath(); ctx.moveTo(i, -arenaSize); ctx.lineTo(i, arenaSize); ctx.stroke();
+    }
+
+    ctx.strokeStyle = 'red'; ctx.lineWidth = 10;
     ctx.strokeRect(-arenaSize, -arenaSize, arenaSize * 2, arenaSize * 2);
 
-    // Entities
-    ctx.font = '20px serif';
-    gems.forEach(g => ctx.fillText('💎', g.x - 8, g.y + 8));
-    enemies.forEach(en => ctx.fillText(en.type === 'archer' ? '🏹' : '🧟', en.x - 12, en.y + 12));
+    enemies.forEach(en => { ctx.font = '24px serif'; ctx.fillText(en.type === 'archer' ? '🏹' : '🧟', en.x-12, en.y+12); });
+    gems.forEach(g => { ctx.font = '16px serif'; ctx.fillText('💎', g.x-8, g.y+8); });
+    combat.projectiles.forEach(p => { ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI*2); ctx.fill(); });
 
-    combat.projectiles.forEach(p => {
-        ctx.fillStyle = p.color;
-        ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
-    });
-
-    shockwaves.forEach((sw, i) => {
-        ctx.strokeStyle = `rgba(0, 255, 204, ${sw.op})`;
-        ctx.beginPath(); ctx.arc(sw.x, sw.y, sw.r, 0, Math.PI * 2); ctx.stroke();
-        sw.r += 5; sw.op -= 0.02;
-        if (sw.op <= 0) shockwaves.splice(i, 1);
-    });
-
-    // Player
     ctx.font = (player.isJumping ? 45 : 32) + 'px serif';
-    ctx.fillText('🧛', player.x - 16, player.y + 12);
-
+    ctx.fillText('🧛', player.x-16, player.y+12);
     ctx.restore();
 
-    // HUD
-    document.getElementById('hud').innerText = `Floor: ${spireMap.currentFloorIndex + 1} | HP: ${Math.ceil(player.hp)}`;
+    document.getElementById('hud').innerText = `Floor: ${spireMap.currentFloorIndex+1} | HP: ${Math.ceil(player.hp)} | Gems: ${player.gems}`;
 }
 
-function ticker(time) {
-    update(time);
-    draw();
-    requestAnimationFrame(ticker);
-}
-
-spawnWave(currentWave);
+function ticker(time) { update(time); draw(); requestAnimationFrame(ticker); }
+spawnWave(1);
 requestAnimationFrame(ticker);
