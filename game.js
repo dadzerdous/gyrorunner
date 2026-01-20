@@ -114,107 +114,53 @@ sendMove(player.x, player.y);
 }
 
 function draw() {
-    // 1. Clear the screen with a very dark background
     ctx.fillStyle = '#050208'; 
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.save();
-    // 2. Center the camera on the player
     ctx.translate(canvas.width / 2 - player.x, canvas.height / 2 - player.y);
 
-    // 3. Draw Arena Floor Grid (Lightened for visibility)
+    // Arena Grid & Boundary
     ctx.strokeStyle = '#2a1b4d'; 
-    ctx.lineWidth = 1;
     for (let i = -arenaSize; i <= arenaSize; i += 50) {
-        ctx.beginPath(); 
-        ctx.moveTo(i, -arenaSize); 
-        ctx.lineTo(i, arenaSize); 
-        ctx.stroke();
-        
-        ctx.beginPath(); 
-        ctx.moveTo(-arenaSize, i); 
-        ctx.lineTo(arenaSize, i); 
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(i, -arenaSize); ctx.lineTo(i, arenaSize); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-arenaSize, i); ctx.lineTo(arenaSize, i); ctx.stroke();
     }
-
-    // 4. Draw the Solid Red Boundary Barrier
     ctx.strokeStyle = '#ff0044'; 
-    ctx.lineWidth = 5;
     ctx.strokeRect(-arenaSize, -arenaSize, arenaSize * 2, arenaSize * 2);
 
-    // 5. Draw Gems (💎)
-    ctx.font = '20px serif';
-    ctx.textAlign = 'center';
-    gems.forEach(g => {
-        ctx.fillText('💎', g.x, g.y + 8);
-    });
-
-    // 6. Draw Enemies (Melee 🧟 and Archer 🏹)
-    enemies.forEach(en => {
+    // Draw Synchronized Enemies (from net.js)
+    remoteEnemies.forEach(en => {
         ctx.font = '28px serif';
+        ctx.textAlign = 'center';
         ctx.fillText(en.type === 'archer' ? '🏹' : '🧟', en.x, en.y + 10);
     });
 
-    // 7. Draw Player Projectiles (White/Elemental)
+    // Draw Local Projectiles
     combat.projectiles.forEach(p => {
         ctx.fillStyle = p.color || '#ffffff';
-        ctx.beginPath(); 
-        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); 
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
     });
 
-    // 8. Draw Active Shockwaves
-    shockwaves.forEach((sw) => {
-        ctx.strokeStyle = `rgba(0, 255, 204, ${sw.op})`;
-        ctx.lineWidth = 3;
-        ctx.beginPath(); 
-        ctx.arc(sw.x, sw.y, sw.r, 0, Math.PI * 2); 
-        ctx.stroke();
+    // Draw Other Players
+    Object.entries(remotePlayers).forEach(([id, p]) => {
+        if (!myId || id === myId) return; // Hide self (handled by player object)
+        ctx.font = "28px serif";
+        ctx.fillText("🧙", p.x, p.y + 10);
     });
 
-    // 9. Draw the Player (🧛)
-    // Scale up during jump to simulate height
+    // Draw Local Player
     let scale = player.isJumping ? 1.6 : 1;
     ctx.font = (32 * scale) + 'px serif';
     ctx.fillText('🧛', player.x, player.y + 12);
 
-// game.js - Inside the draw() function (around line 180)
-
-Object.entries(remotePlayers).forEach(([id, p]) => {
-  // Add a check for myId existence to prevent the ReferenceError
-  if (!myId || id === myId) return; 
-
-  ctx.font = "28px serif";
-  ctx.fillText("🧙", p.x, p.y + 10);
-});
-
-
     ctx.restore();
 
-
-    // 10. Draw the HUD (Bright Cyan for visibility on black)
+    // HUD
     ctx.fillStyle = '#00ffcc'; 
     ctx.font = "bold 20px 'Courier New', monospace";
-    ctx.textAlign = "left";
-    
-    // Using a shadow to make it pop even more
-    ctx.shadowColor = "black";
-    ctx.shadowBlur = 4;
-    
-    const hudText = `Floor: ${spireMap.currentFloorIndex + 1} | HP: ${Math.ceil(player.hp)} | Gems: ${player.gems}`;
-    ctx.fillText(hudText, 20, 40);
-    
-    // Reset shadow so it doesn't affect other drawings
-    ctx.shadowBlur = 0;
-
-    // 11. Draw Joystick UI (If active)
-    if (input.joystickActive) {
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
-        ctx.lineWidth = 2;
-        ctx.beginPath(); 
-        ctx.arc(input.touchStart.x, input.touchStart.y, 50, 0, Math.PI * 2); 
-        ctx.stroke();
-    }
+    ctx.fillText(`HP: ${Math.ceil(player.hp)} | Gems: ${player.gems || 0}`, 20, 40);
+}
 }
 function ticker(time) { update(time); draw(); requestAnimationFrame(ticker); }
 spawnWave(1);
