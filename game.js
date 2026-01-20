@@ -1,4 +1,5 @@
-import { connectNet, sendMove, remotePlayers } from "./net.js";
+import { connectNet, sendMove, remotePlayers, myId } from "./net.js";
+
 connectNet();
 
 
