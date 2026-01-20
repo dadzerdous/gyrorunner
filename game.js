@@ -178,8 +178,11 @@ function draw() {
     ctx.font = (32 * scale) + 'px serif';
     ctx.fillText('🧛', player.x, player.y + 12);
 
+// game.js - Inside the draw() function (around line 180)
+
 Object.entries(remotePlayers).forEach(([id, p]) => {
-  if (id === myId) return; // ← hide your own server echo
+  // Add a check for myId existence to prevent the ReferenceError
+  if (!myId || id === myId) return; 
 
   ctx.font = "28px serif";
   ctx.fillText("🧙", p.x, p.y + 10);
