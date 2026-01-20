@@ -161,7 +161,7 @@ function draw() {
     ctx.font = "bold 20px 'Courier New', monospace";
     ctx.fillText(`HP: ${Math.ceil(player.hp)} | Gems: ${player.gems || 0}`, 20, 40);
 }
-}
+
 function ticker(time) { update(time); draw(); requestAnimationFrame(ticker); }
 spawnWave(1);
 requestAnimationFrame(ticker);
