@@ -7,6 +7,21 @@ export class CombatSystem {
     constructor() {
         this.projectiles = [];
         this.particles = [];
+        checkEvolutions(player) {
+    const fireWeapons = player.weapons.filter(w => w.element === 'fire');
+    if (fireWeapons.length >= 2) {
+        // Merge them into a "Tower"
+        player.weapons = player.weapons.filter(w => w.element !== 'fire');
+        player.weapons.push({
+            name: "Inferno Tower",
+            damage: 10,
+            fireRate: 2000,
+            lastShot: 0,
+            element: 'fire',
+            isStatic: true // This weapon doesn't move with player
+        });
+    }
+}
     }
 
     // Handles weapons auto-firing
