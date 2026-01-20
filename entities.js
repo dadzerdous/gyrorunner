@@ -4,6 +4,7 @@ export class Player {
         this.x = 0;
         this.y = 0;
         this.size = 20;
+        this.gems = 0; // Add this line
         
         // --- BASE STATS ---
         this.hp = 10;
