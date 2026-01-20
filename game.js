@@ -1,3 +1,7 @@
+import { connectNet } from "./net.js";
+connectNet();
+
+
 import { Player, Enemy } from './entities.js';
 import { InputHandler } from './input.js';
 import { CombatSystem, AbilitySystem } from './systems.js';
