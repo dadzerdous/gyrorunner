@@ -1,11 +1,11 @@
-import { connectNet, sendMove, remoteEnemies, remotePlayers, myId } from "./net.js";
-import { Player, Enemy } from './entities.js';
+import { connectNet, sendMove, sendHit, remoteEnemies, remotePlayers, myId } from "./net.js";
+import { Player } from './entities.js';
 import { InputHandler } from './input.js';
 import { CombatSystem, AbilitySystem } from './systems.js';
 import { MapSystem } from './map.js';
 
+// KEEP THIS: This starts the WebSocket connection
 connectNet();
-
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -18,44 +18,12 @@ const spireMap = new MapSystem(15);
 
 let gameState = 'WAVE';
 let arenaSize = 450;
-let enemies = [], gems = [], shockwaves = [];
+let gems = [], shockwaves = [];
 
-function spawnWave(waveNum) {
-    enemies = []; gems = []; shockwaves = [];
-    const count = 5 + (waveNum * 2);
-    for (let i = 0; i < count; i++) {
-        enemies.push(new Enemy(i % 7 === 0 ? 'archer' : 'goblin', arenaSize));
-    }
+// Simplified: We don't spawn enemies locally anymore; the server does
+function startWaveUI() {
     gameState = 'WAVE';
     document.getElementById('room-menu').style.display = 'none';
-}
-
-function showRoomSelection() {
-    gameState = 'MAP';
-    const menu = document.getElementById('room-menu');
-    const container = document.getElementById('room-choices');
-    menu.style.display = 'flex';
-    container.innerHTML = "";
-    
-    spireMap.getNextOptions().forEach(type => {
-        const btn = document.createElement('button');
-        btn.innerHTML = type;
-        btn.onclick = () => window.startNextWave(type);
-        container.appendChild(btn);
-    });
-}
-
-window.startNextWave = (type) => {
-    if (type === 'Rest') { player.hp = Math.min(player.maxHp, player.hp + 5); showRoomSelection(); return; }
-    if (type === 'Mystery') { triggerMystery(); return; }
-    spawnWave(spireMap.currentFloorIndex + 1);
-};
-
-function triggerMystery() {
-    // Permanent stat buff example
-    player.maxHp += 2; player.hp += 2;
-    alert("Mystery Ritual: +2 Max HP!");
-    showRoomSelection();
 }
 
 function update(time) {
@@ -67,49 +35,51 @@ function update(time) {
     const cmd = input.consumeCommand();
     AbilitySystem.resolveCommand(cmd, player);
 
-const move = input.getMovement();
-player.currentDir = move;
+    const move = input.getMovement();
+    player.currentDir = move;
+    player.x += move.x * player.speed;
+    player.y += move.y * player.speed;
 
-player.x += move.x * player.speed;
-player.y += move.y * player.speed;
+    // Send position to server so others see you
+    sendMove(player.x, player.y);
 
-// send movement to server
-sendMove(player.x, player.y);
-
-
-
-    // SOLID BARRIER BLOCK
     player.x = Math.max(-arenaSize, Math.min(arenaSize, player.x));
     player.y = Math.max(-arenaSize, Math.min(arenaSize, player.y));
 
     if (player.isJumping) {
         player.jumpTime--;
-        if (player.jumpTime === 0) { player.isJumping = false; shockwaves.push({ x: player.x, y: player.y, r: 10, op: 1 }); }
+        if (player.jumpTime === 0) { 
+            player.isJumping = false; 
+            shockwaves.push({ x: player.x, y: player.y, r: 10, op: 1 }); 
+        }
     }
 
-    combat.updateWeapons(player, enemies, time);
-    combat.updateProjectiles(enemies, arenaSize);
+    // Use remoteEnemies for weapon targeting and projectile hits
+    combat.updateWeapons(player, remoteEnemies, time);
+    
+    // Manual Projectile Update to include sendHit
+    for (let i = combat.projectiles.length - 1; i >= 0; i--) {
+        let p = combat.projectiles[i];
+        p.x += p.vx;
+        p.y += p.vy;
 
-    enemies.forEach(en => {
+        remoteEnemies.forEach(en => {
+            if (Math.hypot(p.x - en.x, p.y - en.y) < 25) {
+                sendHit(en.id, p.damage); // Tell server which specific monster was hit
+                combat.projectiles.splice(i, 1);
+            }
+        });
+
+        if (p && (Math.abs(p.x) > arenaSize + 100 || Math.abs(p.y) > arenaSize + 100)) {
+            combat.projectiles.splice(i, 1);
+        }
+    }
+
+    // Local damage check: if a server enemy is too close, you take damage
+    remoteEnemies.forEach(en => {
         const d = Math.hypot(player.x - en.x, player.y - en.y);
-        en.x += ((player.x - en.x)/d) * en.speed;
-        en.y += ((player.y - en.y)/d) * en.speed;
-        if (d < 25 && !player.isJumping) player.hp -= 0.01;
+        if (d < 25 && !player.isJumping) player.hp -= 0.05;
     });
-
-    enemies = enemies.filter(en => {
-        if (en.hp <= 0) { gems.push({ x: en.x, y: en.y }); return false; }
-        return true;
-    });
-
-    for (let i = gems.length - 1; i >= 0; i--) {
-        const g = gems[i];
-        const d = Math.hypot(g.x - player.x, g.y - player.y);
-        if (d < 150) { g.x += (player.x - g.x)*0.1; g.y += (player.y - g.y)*0.1; }
-        if (d < 20) { player.gems++; gems.splice(i, 1); }
-    }
-
-    if (enemies.length === 0) showRoomSelection();
 }
 
 function draw() {
@@ -119,7 +89,7 @@ function draw() {
     ctx.save();
     ctx.translate(canvas.width / 2 - player.x, canvas.height / 2 - player.y);
 
-    // Arena Grid & Boundary
+    // Arena Grid
     ctx.strokeStyle = '#2a1b4d'; 
     for (let i = -arenaSize; i <= arenaSize; i += 50) {
         ctx.beginPath(); ctx.moveTo(i, -arenaSize); ctx.lineTo(i, arenaSize); ctx.stroke();
@@ -128,27 +98,31 @@ function draw() {
     ctx.strokeStyle = '#ff0044'; 
     ctx.strokeRect(-arenaSize, -arenaSize, arenaSize * 2, arenaSize * 2);
 
-    // Draw Synchronized Enemies (from net.js)
+    // Draw Synced Enemies and Health Bars
     remoteEnemies.forEach(en => {
         ctx.font = '28px serif';
         ctx.textAlign = 'center';
         ctx.fillText(en.type === 'archer' ? '🏹' : '🧟', en.x, en.y + 10);
+        
+        // Health Bar
+        ctx.fillStyle = 'red';
+        ctx.fillRect(en.x - 15, en.y - 25, 30 * (en.hp / 3), 4);
     });
 
-    // Draw Local Projectiles
+    // Projectiles
     combat.projectiles.forEach(p => {
         ctx.fillStyle = p.color || '#ffffff';
         ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
     });
 
-    // Draw Other Players
+    // Other Players
     Object.entries(remotePlayers).forEach(([id, p]) => {
-        if (!myId || id === myId) return; // Hide self (handled by player object)
+        if (!myId || id === myId) return; 
         ctx.font = "28px serif";
         ctx.fillText("🧙", p.x, p.y + 10);
     });
 
-    // Draw Local Player
+    // Local Player
     let scale = player.isJumping ? 1.6 : 1;
     ctx.font = (32 * scale) + 'px serif';
     ctx.fillText('🧛', player.x, player.y + 12);
@@ -158,9 +132,9 @@ function draw() {
     // HUD
     ctx.fillStyle = '#00ffcc'; 
     ctx.font = "bold 20px 'Courier New', monospace";
-    ctx.fillText(`HP: ${Math.ceil(player.hp)} | Gems: ${player.gems || 0}`, 20, 40);
+    ctx.fillText(`HP: ${Math.max(0, Math.ceil(player.hp))} | Gems: ${player.gems || 0}`, 20, 40);
 }
 
 function ticker(time) { update(time); draw(); requestAnimationFrame(ticker); }
-spawnWave(1);
+startWaveUI();
 requestAnimationFrame(ticker);
