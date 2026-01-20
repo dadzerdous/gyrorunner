@@ -95,8 +95,9 @@ function update(time) {
     AbilitySystem.resolveCommand(cmd, player, shockwaves);
 
     // 2. Movement
-    player.x += input.moveDir.x * player.speed;
-    player.y += input.moveDir.y * player.speed;
+const move = input.getMovement();
+player.x += move.x * player.speed;
+player.y += move.y * player.speed;
     player.x = Math.max(-arenaSize, Math.min(arenaSize, player.x));
     player.y = Math.max(-arenaSize, Math.min(arenaSize, player.y));
 
