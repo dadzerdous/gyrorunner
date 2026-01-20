@@ -67,10 +67,15 @@ function update(time) {
     const cmd = input.consumeCommand();
     AbilitySystem.resolveCommand(cmd, player);
 
-    const move = input.getMovement();
-    player.currentDir = move;
-    player.x += move.x * player.speed;
-    player.y += move.y * player.speed;
+const move = input.getMovement();
+player.currentDir = move;
+
+player.x += move.x * player.speed;
+player.y += move.y * player.speed;
+
+// send movement to server
+sendMove(move.x * player.speed, move.y * player.speed);
+
 
     // SOLID BARRIER BLOCK
     player.x = Math.max(-arenaSize, Math.min(arenaSize, player.x));
@@ -171,7 +176,13 @@ function draw() {
     ctx.font = (32 * scale) + 'px serif';
     ctx.fillText('🧛', player.x, player.y + 12);
 
+    ctx.font = "28px serif";
+Object.values(remotePlayers).forEach(p => {
+  ctx.fillText("🧙", p.x, p.y + 10);
+});
+
     ctx.restore();
+
 
     // 10. Draw the HUD (Bright Cyan for visibility on black)
     ctx.fillStyle = '#00ffcc'; 
