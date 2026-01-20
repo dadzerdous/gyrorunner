@@ -1,6 +1,7 @@
 const WS_URL = "wss://gyrorunner-server.onrender.com";
 
 let ws = null;
+export let remotePlayers = {};
 
 export function connectNet() {
   ws = new WebSocket(WS_URL);
@@ -11,14 +12,22 @@ export function connectNet() {
 
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
-    console.log("[net] state snapshot", msg);
+    if (msg.type === "state") {
+      remotePlayers = msg.players;
+    }
   };
 
   ws.onerror = (err) => {
     console.error("[net] ws error", err);
   };
+}
 
-  ws.onclose = () => {
-    console.log("[net] disconnected");
-  };
+export function sendMove(x, y) {
+  if (!ws || ws.readyState !== 1) return;
+
+  ws.send(JSON.stringify({
+    type: "move",
+    x,
+    y
+  }));
 }
