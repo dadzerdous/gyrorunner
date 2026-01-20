@@ -2,6 +2,7 @@ const WS_URL = "wss://gyrorunner-server.onrender.com";
 
 let ws = null;
 export let remotePlayers = {};
+export let myId = null;
 
 export function connectNet() {
   ws = new WebSocket(WS_URL);
@@ -12,13 +13,15 @@ export function connectNet() {
 
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
+
+    if (msg.type === "welcome") {
+      myId = msg.id;
+      console.log("[net] my id:", myId);
+    }
+
     if (msg.type === "state") {
       remotePlayers = msg.players;
     }
-  };
-
-  ws.onerror = (err) => {
-    console.error("[net] ws error", err);
   };
 }
 
