@@ -96,29 +96,45 @@ function update(time) {
 
     // 2. Input & Movement
     const cmd = input.consumeCommand();
+  // ... inside update(time) ...
+
     const move = input.getMovement();
-    player.currentDir = move;
     
-    // Resolve Fire Skills
-    if (cmd === 'UP_SWIPE' && player.skills.fireBurst.cooldown <= 0) {
-        triggerFireBurst(); 
-    }
+    // Calculate potential new position
+    let nextX = player.x + move.x * player.speed;
+    let nextY = player.y + move.y * player.speed;
 
-    player.x += move.x * player.speed;
-    player.y += move.y * player.speed;
+    const pRadius = 20; // The "size" of the emoji (radius)
 
-    // 3. Grid & Hazard Collisions
+    // --- HAZARD COLLISION (Fixed Hitbox) ---
+    let hitBarrier = false;
+    
     hazards.forEach(h => {
-        if (player.x > h.x && player.x < h.x + 50 && player.y > h.y && player.y < h.y + 50) {
+        // Check if Player Box overlaps Hazard Box (50x50)
+        // Logic: PlayerRight > HazardLeft && PlayerLeft < HazardRight...
+        if (nextX + pRadius > h.x && nextX - pRadius < h.x + 50 &&
+            nextY + pRadius > h.y && nextY - pRadius < h.y + 50) {
+            
             if (h.type === 'BARRIER') {
-                player.x -= move.x * player.speed;
-                player.y -= move.y * player.speed;
+                hitBarrier = true; // We hit a wall, don't apply movement
             } else if (h.type === 'TRAP' && !player.isJumping) {
-                player.hp -= 0.1; // Lava hurts!
+                player.hp -= 0.1; // Lava still hurts
             }
         }
     });
 
+    // Only move if we didn't hit a barrier
+    if (!hitBarrier) {
+        player.x = nextX;
+        player.y = nextY;
+    }
+
+    // --- ARENA BOUNDARY (Keep entire emoji inside) ---
+    // Instead of stopping at the center, stop at the edge minus radius
+    player.x = Math.max(-arenaSize + pRadius, Math.min(arenaSize - pRadius, player.x));
+    player.y = Math.max(-arenaSize + pRadius, Math.min(arenaSize - pRadius, player.y));
+
+    // Send position to server...
     sendMove(player.x, player.y);
 
     // 4. Combat & Hits
@@ -198,8 +214,15 @@ function draw() {
         }
     });
 
+ctx.lineWidth = 5; // Make it thick
     ctx.strokeStyle = '#ff0044'; 
+    ctx.shadowBlur = 20; // Add a glow
+    ctx.shadowColor = '#ff0044';
     ctx.strokeRect(-arenaSize, -arenaSize, arenaSize * 2, arenaSize * 2);
+    
+    // Reset shadow so other things don't glow
+    ctx.shadowBlur = 0; 
+    ctx.lineWidth = 1;
 
     // 2. Enemies & Projectiles
     remoteEnemies.forEach(en => {
