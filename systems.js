@@ -89,4 +89,22 @@ export class AbilitySystem {
             player.skills.dash.cooldown = player.skills.dash.maxCD;
         }
     }
+    static triggerSkill(player, enemies, shockwaves, sendHit) {
+        // Fire Burst Logic
+        if (player.element === 'fire') {
+            shockwaves.push({ 
+                x: player.x, y: player.y, r: 10, maxR: 100, alpha: 1,
+                color: player.weapons[0].color 
+            });
+            
+            enemies.forEach(en => {
+                if (Math.hypot(en.x - player.x, en.y - player.y) < 100) {
+                    sendHit(en.id, 2);
+                }
+            });
+            player.skills.fireBurst.cooldown = player.skills.fireBurst.maxCD;
+        }
+        
+        // FUTURE: Add Water/Earth logic here
+    }
 }
