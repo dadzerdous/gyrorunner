@@ -3,28 +3,32 @@ export class Player {
     constructor() {
         this.x = 0;
         this.y = 0;
-        this.size = 20;
-        this.gems = 0; // Add this line
+        this.level = 1;
+        this.xp = 0;
+        this.xpToNext = 100;
+        this.gold = 0;
+        this.skillPoints = 0;
         
-        // --- BASE STATS ---
+        // Fire Class Progression
+        this.element = 'fire';
         this.hp = 10;
         this.maxHp = 10;
         this.speed = 3.5;
-        this.armor = 0;
-        this.luck = 1;
-
-        // --- WEAPONS ---
-        // Multiple weapons can be active (like Brotato)
+        
         this.weapons = [
-            { name: "Blood Bolt", damage: 2, fireRate: 1000, lastShot: 0, element: "none" }
+            { name: "Starter Wand", damage: 2, fireRate: 1000, lastShot: 0, color: 'orange' }
         ];
 
-        // --- SKILLS (ACTION COMMANDS) ---
-        // These are unlocked via the Spire-style level up
         this.skills = {
-            jump: { unlocked: false, cooldown: 0, maxCD: 200 },
-            shield: { unlocked: false, cooldown: 0, maxCD: 400 },
-            dash: { unlocked: false, cooldown: 0, maxCD: 100 }
+            fireBurst: { unlocked: true, cooldown: 0, maxCD: 150 }, // Level 1
+            flameDash: { unlocked: false, cooldown: 0, maxCD: 200 }, // Level 3
+            moltenGuard: { unlocked: false, cooldown: 0, maxCD: 400 }, // Level 6
+            inferno: { unlocked: false, cooldown: 0, maxCD: 1000 }    // Level 9 (Ult)
+        };
+        
+        this.keystones = {
+            chainExplosions: false, // Level 5
+            burnSpread: false      // Level 10
         };
     }
 }
