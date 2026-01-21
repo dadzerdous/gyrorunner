@@ -168,7 +168,23 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(i, -arenaSize); ctx.lineTo(i, arenaSize); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(-arenaSize, i); ctx.lineTo(arenaSize, i); ctx.stroke();
     }
-
+// --- PASTE THIS HERE ---
+    // Draw Shockwaves (Explosions)
+    shockwaves.forEach(sw => {
+        sw.r += 5;        // Expand radius
+        sw.alpha -= 0.05; // Fade out
+        
+        ctx.beginPath();
+        ctx.arc(sw.x, sw.y, sw.r, 0, Math.PI * 2);
+        ctx.fillStyle = sw.color || 'orange';
+        ctx.globalAlpha = Math.max(0, sw.alpha); // Apply fade
+        ctx.fill();
+        ctx.globalAlpha = 1.0; // Reset opacity
+    });
+    
+    // Remove finished shockwaves
+    shockwaves = shockwaves.filter(sw => sw.alpha > 0);
+    // -----------------------
     hazards.forEach(h => {
         if (h.type === 'BARRIER') {
             ctx.fillStyle = '#3a3a4d';
