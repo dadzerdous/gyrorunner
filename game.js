@@ -262,3 +262,67 @@ function drawOverlayMessage() {
     ctx.fillStyle = '#00ffcc';
     ctx.fillText("Press ANY KEY to Progress", canvas.width / 2, canvas.height / 2 + 100);
 }
+// --- MISSING HELPER FUNCTIONS ---
+
+// 1. Fixes the crash when leveling up
+function checkUnlocks() {
+    // Unlock skills based on Level
+    if (player.level >= 3 && !player.skills.flameDash.unlocked) {
+        player.skills.flameDash.unlocked = true;
+        showAnnouncement("LEVEL 3 REACHED", "Flame Dash Unlocked! (Swipe Right)");
+    }
+    if (player.level >= 6 && !player.skills.moltenGuard.unlocked) {
+        player.skills.moltenGuard.unlocked = true;
+        showAnnouncement("LEVEL 6 REACHED", "Molten Guard Unlocked!");
+    }
+    if (player.level === 5) {
+         showAnnouncement("KEYSTONE UNLOCKED", "Explosions now chain nearby!");
+         player.keystones.chainExplosions = true;
+    }
+}
+
+// 2. Fixes the crash when trying to use the Fire Burst skill
+function triggerFireBurst() {
+    // Create a stationary explosion area
+    shockwaves.push({ 
+        x: player.x, 
+        y: player.y, 
+        r: 10, 
+        maxR: 100, 
+        alpha: 1,
+        color: player.weapons[0].color // Use class color
+    });
+    
+    // Damage enemies in range
+    remoteEnemies.forEach(en => {
+        const dist = Math.hypot(en.x - player.x, en.y - player.y);
+        if (dist < 100) {
+            en.hp -= 2; // Burst damage
+            sendHit(en.id, 2);
+        }
+    });
+
+    player.skills.fireBurst.cooldown = player.skills.fireBurst.maxCD;
+}
+
+// 3. Update Selection Logic to handle Colors/Themes
+window.selectElement = (emoji, type) => {
+    player.avatar = emoji; 
+    player.element = 'fire'; // Keep mechanics as Fire for now
+    
+    // Custom Theming based on Emoji
+    if (type === 'blood') {
+        player.weapons[0].color = '#ff0000'; // Red for Vampire
+        player.weapons[0].damage = 5; // Higher dmg, slower fire
+    } else if (type === 'plague') {
+        player.weapons[0].color = '#00ff00'; // Green for Zombie
+        player.weapons[0].fireRate = 800; // Faster fire
+    } else {
+        player.weapons[0].color = 'orange'; // Default Mage
+    }
+    
+    document.getElementById('char-select').style.display = 'none';
+    generateHazards();
+    
+    window.showAnnouncement("SURVIVE", "Reach Floor 10.");
+};
