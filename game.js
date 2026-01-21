@@ -14,10 +14,12 @@ const input = new InputHandler();
 const player = new Player();
 const combat = new CombatSystem();
 
+let gameState = 'START'; // Start in menu
 let arenaSize = 450;
 let shockwaves = [];
 let hazards = [];
-let tickerMsg = { text: "", x: canvas.width }; // Scrolling text data
+let tickerMsg = { text: "", x: canvas.width }; 
+let currentMessage = { title: "", body: "" }; // Holds the pop-up text
 
 // --- SELECTION LOGIC ---
 window.selectElement = (emoji, type) => {
@@ -38,9 +40,22 @@ window.selectElement = (emoji, type) => {
     document.getElementById('char-select').style.display = 'none';
     generateHazards();
     
-    // Start Ticker
-    window.triggerTicker("REACH FLOOR 10 TO SURVIVE");
+    // Show the intro message
+    showAnnouncement("ASCENSION BEGINS", "Reach Floor 10 to survive.");
 };
+
+// --- MESSAGE SYSTEM (Pop-ups) ---
+function showAnnouncement(title, body) {
+    currentMessage = { title, body };
+    gameState = 'MESSAGE'; // Pauses the game loop visually
+}
+
+function dismissMessage() {
+    if (gameState === 'MESSAGE') {
+        gameState = 'WAVE'; // Unpause / Start Game
+        window.triggerTicker("SURVIVE THE WAVES");
+    }
+}
 
 // --- SCROLLING TICKER HELPER ---
 window.triggerTicker = (text) => {
@@ -63,6 +78,9 @@ function generateHazards() {
 
 // --- MAIN UPDATE LOOP ---
 function update(time) {
+    // If we are looking at a message, do not update game logic
+    if (gameState === 'MESSAGE' || gameState === 'START') return;
+
     // 1. Ticker Logic
     if (tickerMsg.text) {
         tickerMsg.x -= 3; 
@@ -84,7 +102,6 @@ function update(time) {
 
     const move = input.getMovement();
     
-    // Fix: Remember direction for Dashing
     if (move.x !== 0 || move.y !== 0) player.currentDir = move;
     
     let nextX = player.x + move.x * player.speed;
@@ -93,7 +110,6 @@ function update(time) {
 
     // 5. PHASE LOGIC (Hub vs Wave)
     if (serverPhase === 'HUB') {
-        // Safe Zone Logic
         checkHubInteractions(player.x, player.y);
         
         // Exit Logic (Walk to Right Edge)
@@ -104,14 +120,11 @@ function update(time) {
             sendReady(false);
         }
 
-        // Allow movement freely in Hub (No hazards)
         player.x = nextX;
         player.y = nextY;
 
     } else { 
         // WAVE LOGIC
-        
-        // Hazard Collisions
         let hitBarrier = false;
         hazards.forEach(h => {
             if (nextX + pRadius > h.x && nextX - pRadius < h.x + 50 &&
@@ -126,7 +139,6 @@ function update(time) {
             player.y = nextY;
         }
 
-        // Portal Interaction
         if (portal) {
             if (Math.hypot(player.x - portal.x, player.y - portal.y) < 50) {
                  sendReady(true);
@@ -147,7 +159,6 @@ function update(time) {
         combat.updateWeapons(player, remoteEnemies, time);
     }
     
-    // Projectiles always update
     for (let i = combat.projectiles.length - 1; i >= 0; i--) {
         let p = combat.projectiles[i];
         p.x += p.vx;
@@ -194,7 +205,7 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(-arenaSize, i); ctx.lineTo(arenaSize, i); ctx.stroke();
     }
 
-    // 2. Shockwaves (Floor Layer)
+    // 2. Shockwaves
     shockwaves.forEach(sw => {
         sw.r += 5; sw.alpha -= 0.05;
         ctx.beginPath(); ctx.arc(sw.x, sw.y, sw.r, 0, Math.PI * 2);
@@ -204,20 +215,16 @@ function draw() {
     });
     shockwaves = shockwaves.filter(sw => sw.alpha > 0);
 
-    // 3. Phase Specific Drawing
+    // 3. Phase Specific
     if (serverPhase === 'HUB') {
-        // Shop
         ctx.fillStyle = 'rgba(255, 255, 0, 0.3)'; ctx.fillRect(-225, -25, 50, 50);
         ctx.fillStyle = 'white'; ctx.fillText("🛒", -210, 10);
-        // Skills
         ctx.fillStyle = 'rgba(0, 255, 0, 0.3)'; ctx.fillRect(-25, -225, 50, 50);
         ctx.fillText("💪", -10, -190);
-        // Exit
         ctx.fillStyle = 'rgba(0, 255, 255, 0.2)';
         ctx.fillRect(arenaSize - 100, -arenaSize, 100, arenaSize*2);
         ctx.fillText("EXIT ➡", arenaSize - 250, 0);
     } else {
-        // Hazards
         hazards.forEach(h => {
             if (h.type === 'BARRIER') {
                 ctx.fillStyle = '#3a3a4d'; ctx.fillRect(h.x + 2, h.y + 2, 46, 46);
@@ -228,7 +235,6 @@ function draw() {
             }
         });
         
-        // Portal
         if (portal) {
             ctx.shadowBlur = 20; ctx.shadowColor = 'cyan';
             ctx.fillStyle = '#00ffff';
@@ -238,7 +244,6 @@ function draw() {
             ctx.shadowBlur = 0;
         }
 
-        // Enemies
         remoteEnemies.forEach(en => {
             ctx.font = '28px serif'; ctx.textAlign = 'center';
             ctx.fillText(en.type === 'archer' ? '🏹' : '🧟', en.x, en.y + 10);
@@ -246,7 +251,7 @@ function draw() {
         });
     }
 
-    // 4. Border (Thick Neon)
+    // 4. Border
     ctx.lineWidth = 5; ctx.strokeStyle = '#ff0044'; 
     ctx.shadowBlur = 20; ctx.shadowColor = '#ff0044';
     ctx.strokeRect(-arenaSize, -arenaSize, arenaSize * 2, arenaSize * 2);
@@ -274,23 +279,41 @@ function draw() {
 
     // 6. UI Layers
     drawModernUI();
+    
+    // Draw Ticker
     if (tickerMsg.text) {
         ctx.fillStyle = '#ffcc00'; ctx.font = "bold 24px monospace";
         ctx.fillText(tickerMsg.text, tickerMsg.x, canvas.height - 80);
+    }
+    
+    // Draw Pop-up Message
+    if (gameState === 'MESSAGE') {
+        drawOverlayMessage();
     }
 }
 
 // --- UI HELPERS ---
 function drawModernUI() {
-    // HP
     ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(20, canvas.height - 40, 200, 20);
     ctx.fillStyle = '#ff0044'; ctx.fillRect(20, canvas.height - 40, 200 * (player.hp / player.maxHp), 20);
-    // XP
     ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.fillRect(20, 20, canvas.width - 40, 8);
     ctx.fillStyle = '#ffcc00'; ctx.fillRect(20, 20, (canvas.width - 40) * (player.xp / player.xpToNext), 8);
-    // Text
     ctx.fillStyle = '#00ffcc'; ctx.font = "bold 18px monospace"; ctx.textAlign = "left";
     ctx.fillText(`LVL ${player.level} | ${player.avatar || '?'} FIRE | 💰 ${player.gold}`, 20, 50);
+}
+
+function drawOverlayMessage() {
+    ctx.fillStyle = 'rgba(0,0,0,0.9)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#ffcc00';
+    ctx.textAlign = 'center';
+    ctx.font = "bold 40px monospace";
+    ctx.fillText(currentMessage.title, canvas.width / 2, canvas.height / 2 - 20);
+    ctx.fillStyle = 'white';
+    ctx.font = "20px monospace";
+    ctx.fillText(currentMessage.body, canvas.width / 2, canvas.height / 2 + 30);
+    ctx.fillStyle = '#00ffcc';
+    ctx.fillText("TAP OR CLICK TO CONTINUE", canvas.width / 2, canvas.height / 2 + 100);
 }
 
 function checkUnlocks() {
@@ -309,7 +332,6 @@ function triggerFireBurst() {
         x: player.x, y: player.y, r: 10, maxR: 100, alpha: 1,
         color: player.weapons[0].color 
     });
-    // Hit Logic
     remoteEnemies.forEach(en => {
         if (Math.hypot(en.x - player.x, en.y - player.y) < 100) {
             sendHit(en.id, 2);
@@ -320,3 +342,8 @@ function triggerFireBurst() {
 
 function ticker(time) { update(time); draw(); requestAnimationFrame(ticker); }
 requestAnimationFrame(ticker);
+
+// --- INPUT LISTENERS (THIS FIXES YOUR CLICK ISSUE) ---
+window.addEventListener('keydown', dismissMessage);
+window.addEventListener('mousedown', dismissMessage); // Mouse click to dismiss
+window.addEventListener('touchstart', dismissMessage); // Phone tap to dismiss
