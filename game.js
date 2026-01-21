@@ -5,6 +5,32 @@ import { CombatSystem, AbilitySystem } from './systems.js';
 import { MapSystem } from './map.js';
 let currentMessage = { title: "", body: "" };
 // KEEP THIS: This starts the WebSocket connection
+window.selectElement = (emoji) => {
+    player.avatar = emoji; // Store the emoji for drawing
+    player.element = 'fire'; // Force Fire Class skills
+    
+    // Assign Fire Class Starting Stats
+    player.weapons[0].damage = 4;
+    player.weapons[0].color = 'orange';
+    
+    document.getElementById('char-select').style.display = 'none';
+    generateHazards();
+    
+    // Show a "New Game" pop-up instead of starting instantly
+    window.showAnnouncement("ASCENSION BEGINS", "Reach Floor 10 to survive the inferno.");
+};
+
+window.showAnnouncement = (title, body) => {
+    currentMessage = { title, body };
+    gameState = 'MESSAGE';
+};
+
+// Listen for any key to progress past announcements
+window.addEventListener('keydown', e => {
+    if (gameState === 'MESSAGE') {
+        gameState = 'WAVE';
+    }
+});
 connectNet();
 
 const canvas = document.getElementById('gameCanvas');
@@ -130,15 +156,13 @@ function levelUp() {
 }
 
 function draw() {
-    // 1. Background
     ctx.fillStyle = '#050208'; 
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.save();
-    // 2. Camera Centering
     ctx.translate(canvas.width / 2 - player.x, canvas.height / 2 - player.y);
 
-    // 3. Environment (Grid & Hazards)
+    // 1. Arena & Hazards
     ctx.strokeStyle = '#2a1b4d'; 
     for (let i = -arenaSize; i <= arenaSize; i += 50) {
         ctx.beginPath(); ctx.moveTo(i, -arenaSize); ctx.lineTo(i, arenaSize); ctx.stroke();
@@ -161,12 +185,11 @@ function draw() {
     ctx.strokeStyle = '#ff0044'; 
     ctx.strokeRect(-arenaSize, -arenaSize, arenaSize * 2, arenaSize * 2);
 
-    // 4. Combatants (Enemies & Projectiles)
+    // 2. Enemies & Projectiles
     remoteEnemies.forEach(en => {
         ctx.font = '28px serif';
         ctx.textAlign = 'center';
         ctx.fillText(en.type === 'archer' ? '🏹' : '🧟', en.x, en.y + 10);
-        // Enemy Health Bar
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
         ctx.fillRect(en.x - 15, en.y - 25, 30, 4);
         ctx.fillStyle = 'red';
@@ -178,29 +201,26 @@ function draw() {
         ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
     });
 
-    // 5. Remote Players (with Name Tags)
+    // 3. Remote Players & Local Player
     Object.entries(remotePlayers).forEach(([id, p]) => {
         if (!myId || id === myId) return; 
         ctx.font = "28px serif";
         ctx.fillText("🧙", p.x, p.y + 10);
-        
-        // Small text to identify other players
         ctx.font = "12px monospace";
         ctx.fillStyle = "white";
-        ctx.fillText(`ID: ${id.substring(0, 4)}`, p.x, p.y - 15);
+        ctx.fillText(`Player: ${id.substring(0, 4)}`, p.x, p.y - 15);
     });
 
-    // 6. Local Player
     let scale = player.isJumping ? 1.6 : 1;
     ctx.font = (32 * scale) + 'px serif';
-    ctx.fillText('🧛', player.x, player.y + 12);
+    ctx.fillText(player.avatar || '🧛', player.x, player.y + 12); // Use chosen emoji
 
     ctx.restore();
 
-    // 7. NEW PLAYER UI (HUD)
+    // 4. Modern Player UI
     drawModernUI();
 
-    // 8. Interrupt Pop-up (Wait for input)
+    // 5. Progress Overlay
     if (gameState === 'MESSAGE') {
         drawOverlayMessage();
     }
@@ -210,42 +230,35 @@ startWaveUI();
 requestAnimationFrame(ticker);
 
 function drawModernUI() {
-    // HP Bar in bottom left
-    const hpWidth = 200;
+    // Health Bar
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
-    ctx.fillRect(20, canvas.height - 40, hpWidth, 20);
+    ctx.fillRect(20, canvas.height - 40, 200, 20);
     ctx.fillStyle = '#ff0044';
-    ctx.fillRect(20, canvas.height - 40, hpWidth * (player.hp / player.maxHp), 20);
-    ctx.strokeStyle = 'white';
-    ctx.strokeRect(20, canvas.height - 40, hpWidth, 20);
-
-    // XP Bar at the top
-    const xpWidth = canvas.width - 40;
+    ctx.fillRect(20, canvas.height - 40, 200 * (player.hp / player.maxHp), 20);
+    
+    // XP Bar
     ctx.fillStyle = 'rgba(255,255,255,0.1)';
-    ctx.fillRect(20, 20, xpWidth, 8);
+    ctx.fillRect(20, 20, canvas.width - 40, 8);
     ctx.fillStyle = '#ffcc00';
-    ctx.fillRect(20, 20, xpWidth * (player.xp / player.xpToNext), 8);
+    ctx.fillRect(20, 20, (canvas.width - 40) * (player.xp / player.xpToNext), 8);
 
-    // Stats Text
+    // Text Stats
     ctx.fillStyle = '#00ffcc';
     ctx.font = "bold 18px monospace";
     ctx.textAlign = "left";
-    ctx.fillText(`LVL ${player.level} | 🔥 FIRE CLASS | 💰 ${player.gold}`, 20, 50);
+    ctx.fillText(`LVL ${player.level} | ${player.avatar} FIRE | 💰 ${player.gold}`, 20, 50);
 }
 
 function drawOverlayMessage() {
-    ctx.fillStyle = 'rgba(0,0,0,0.85)';
+    ctx.fillStyle = 'rgba(0,0,0,0.9)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
     ctx.fillStyle = '#ffcc00';
     ctx.textAlign = 'center';
     ctx.font = "bold 40px monospace";
     ctx.fillText(currentMessage.title, canvas.width / 2, canvas.height / 2 - 20);
-    
     ctx.fillStyle = 'white';
     ctx.font = "20px monospace";
     ctx.fillText(currentMessage.body, canvas.width / 2, canvas.height / 2 + 30);
-    
     ctx.fillStyle = '#00ffcc';
-    ctx.fillText("Press ANY KEY to Continue", canvas.width / 2, canvas.height / 2 + 100);
+    ctx.fillText("Press ANY KEY to Progress", canvas.width / 2, canvas.height / 2 + 100);
 }
