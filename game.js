@@ -47,6 +47,12 @@ let arenaSize = 450;
 let gems = [], shockwaves = [];
 let hazards = [];
 
+function dismissMessage() {
+    if (gameState === 'MESSAGE') {
+        gameState = 'WAVE';
+    }
+}
+
 function generateHazards() {
     hazards = [];
     const numHazards = 8;
@@ -365,3 +371,6 @@ window.selectElement = (emoji, type) => {
     
     window.showAnnouncement("SURVIVE", "Reach Floor 10.");
 };
+window.addEventListener('keydown', dismissMessage);
+window.addEventListener('mousedown', dismissMessage); // Mouse click
+window.addEventListener('touchstart', dismissMessage); // Phone tap
