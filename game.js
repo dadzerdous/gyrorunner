@@ -3,7 +3,7 @@ import { Player } from './entities.js';
 import { InputHandler } from './input.js';
 import { CombatSystem, AbilitySystem } from './systems.js';
 import { MapSystem } from './map.js';
-
+let currentMessage = { title: "", body: "" };
 // KEEP THIS: This starts the WebSocket connection
 connectNet();
 
@@ -65,49 +65,40 @@ function startWaveUI() {
 function update(time) {
     if (gameState !== 'WAVE') return;
 
-    if (player.skills.jump.cooldown > 0) player.skills.jump.cooldown--;
-    if (player.skills.dash.cooldown > 0) player.skills.dash.cooldown--;
+    // 1. Skill Cooldowns
+    Object.values(player.skills).forEach(s => { if (s.cooldown > 0) s.cooldown--; });
 
+    // 2. Input & Movement
     const cmd = input.consumeCommand();
-    AbilitySystem.resolveCommand(cmd, player);
-
     const move = input.getMovement();
     player.currentDir = move;
     
-    // Preliminary move
+    // Resolve Fire Skills
+    if (cmd === 'UP_SWIPE' && player.skills.fireBurst.cooldown <= 0) {
+        triggerFireBurst(); 
+    }
+
     player.x += move.x * player.speed;
     player.y += move.y * player.speed;
 
-    // --- HAZARD COLLISIONS ---
+    // 3. Grid & Hazard Collisions
     hazards.forEach(h => {
-        // Check if player is inside the 50x50 grid square of the hazard
         if (player.x > h.x && player.x < h.x + 50 && player.y > h.y && player.y < h.y + 50) {
             if (h.type === 'BARRIER') {
-                // If it's a barrier, push the player back (prevent movement)
                 player.x -= move.x * player.speed;
                 player.y -= move.y * player.speed;
             } else if (h.type === 'TRAP' && !player.isJumping) {
-                // If it's a trap, take damage over time
-                player.hp -= 0.08; 
+                player.hp -= 0.1; // Lava hurts!
             }
         }
     });
 
     sendMove(player.x, player.y);
 
-    player.x = Math.max(-arenaSize, Math.min(arenaSize, player.x));
-    player.y = Math.max(-arenaSize, Math.min(arenaSize, player.y));
-
-    if (player.isJumping) {
-        player.jumpTime--;
-        if (player.jumpTime === 0) { 
-            player.isJumping = false; 
-            shockwaves.push({ x: player.x, y: player.y, r: 10, op: 1 }); 
-        }
-    }
-
+    // 4. Combat & Hits
     combat.updateWeapons(player, remoteEnemies, time);
     
+    // Handle Projectile Hits + XP Gain
     for (let i = combat.projectiles.length - 1; i >= 0; i--) {
         let p = combat.projectiles[i];
         p.x += p.vx;
@@ -117,45 +108,52 @@ function update(time) {
             if (Math.hypot(p.x - en.x, p.y - en.y) < 25) {
                 sendHit(en.id, p.damage);
                 combat.projectiles.splice(i, 1);
+                
+                // If enemy dies (HP check would ideally be server-side, 
+                // but we simulate XP gain here for responsiveness)
+                if (en.hp <= p.damage) {
+                    player.xp += 20; 
+                    if (player.xp >= player.xpToNext) levelUp();
+                }
             }
         });
-
-        if (p && (Math.abs(p.x) > arenaSize + 100 || Math.abs(p.y) > arenaSize + 100)) {
-            combat.projectiles.splice(i, 1);
-        }
     }
+}
 
-    remoteEnemies.forEach(en => {
-        const d = Math.hypot(player.x - en.x, player.y - en.y);
-        if (d < 25 && !player.isJumping) player.hp -= 0.05;
-    });
+function levelUp() {
+    player.level++;
+    player.xp = 0;
+    player.xpToNext *= 1.2;
+    player.skillPoints += 1;
+    // Trigger Level-specific unlocks (Level 3 Dash, Level 6 Guard, etc.)
+    checkUnlocks();
 }
 
 function draw() {
+    // 1. Background
     ctx.fillStyle = '#050208'; 
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.save();
+    // 2. Camera Centering
     ctx.translate(canvas.width / 2 - player.x, canvas.height / 2 - player.y);
 
-    // Arena Grid
+    // 3. Environment (Grid & Hazards)
     ctx.strokeStyle = '#2a1b4d'; 
     for (let i = -arenaSize; i <= arenaSize; i += 50) {
         ctx.beginPath(); ctx.moveTo(i, -arenaSize); ctx.lineTo(i, arenaSize); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(-arenaSize, i); ctx.lineTo(arenaSize, i); ctx.stroke();
     }
 
-    // --- DRAW HAZARDS ---
     hazards.forEach(h => {
         if (h.type === 'BARRIER') {
-            ctx.fillStyle = '#3a3a4d'; // Dark stone color
-            ctx.fillRect(h.x + 2, h.y + 2, 46, 46); // Slightly smaller for border look
+            ctx.fillStyle = '#3a3a4d';
+            ctx.fillRect(h.x + 2, h.y + 2, 46, 46);
             ctx.strokeStyle = '#555';
             ctx.strokeRect(h.x + 2, h.y + 2, 46, 46);
         } else if (h.type === 'TRAP') {
-            ctx.fillStyle = 'rgba(255, 68, 0, 0.3)'; // Glowing lava
+            ctx.fillStyle = 'rgba(255, 68, 0, 0.3)';
             ctx.fillRect(h.x, h.y, 50, 50);
-            ctx.font = '20px serif';
             ctx.fillText('🔥', h.x + 25, h.y + 35);
         }
     });
@@ -163,10 +161,14 @@ function draw() {
     ctx.strokeStyle = '#ff0044'; 
     ctx.strokeRect(-arenaSize, -arenaSize, arenaSize * 2, arenaSize * 2);
 
+    // 4. Combatants (Enemies & Projectiles)
     remoteEnemies.forEach(en => {
         ctx.font = '28px serif';
         ctx.textAlign = 'center';
         ctx.fillText(en.type === 'archer' ? '🏹' : '🧟', en.x, en.y + 10);
+        // Enemy Health Bar
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(en.x - 15, en.y - 25, 30, 4);
         ctx.fillStyle = 'red';
         ctx.fillRect(en.x - 15, en.y - 25, 30 * (en.hp / 3), 4);
     });
@@ -176,23 +178,74 @@ function draw() {
         ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
     });
 
+    // 5. Remote Players (with Name Tags)
     Object.entries(remotePlayers).forEach(([id, p]) => {
         if (!myId || id === myId) return; 
         ctx.font = "28px serif";
         ctx.fillText("🧙", p.x, p.y + 10);
+        
+        // Small text to identify other players
+        ctx.font = "12px monospace";
+        ctx.fillStyle = "white";
+        ctx.fillText(`ID: ${id.substring(0, 4)}`, p.x, p.y - 15);
     });
 
+    // 6. Local Player
     let scale = player.isJumping ? 1.6 : 1;
     ctx.font = (32 * scale) + 'px serif';
     ctx.fillText('🧛', player.x, player.y + 12);
 
     ctx.restore();
 
-    ctx.fillStyle = '#00ffcc'; 
-    ctx.font = "bold 20px 'Courier New', monospace";
-    ctx.fillText(`HP: ${Math.max(0, Math.ceil(player.hp))} | Gems: ${player.gems || 0}`, 20, 40);
-}
+    // 7. NEW PLAYER UI (HUD)
+    drawModernUI();
 
+    // 8. Interrupt Pop-up (Wait for input)
+    if (gameState === 'MESSAGE') {
+        drawOverlayMessage();
+    }
+}
 function ticker(time) { update(time); draw(); requestAnimationFrame(ticker); }
 startWaveUI();
 requestAnimationFrame(ticker);
+
+function drawModernUI() {
+    // HP Bar in bottom left
+    const hpWidth = 200;
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(20, canvas.height - 40, hpWidth, 20);
+    ctx.fillStyle = '#ff0044';
+    ctx.fillRect(20, canvas.height - 40, hpWidth * (player.hp / player.maxHp), 20);
+    ctx.strokeStyle = 'white';
+    ctx.strokeRect(20, canvas.height - 40, hpWidth, 20);
+
+    // XP Bar at the top
+    const xpWidth = canvas.width - 40;
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.fillRect(20, 20, xpWidth, 8);
+    ctx.fillStyle = '#ffcc00';
+    ctx.fillRect(20, 20, xpWidth * (player.xp / player.xpToNext), 8);
+
+    // Stats Text
+    ctx.fillStyle = '#00ffcc';
+    ctx.font = "bold 18px monospace";
+    ctx.textAlign = "left";
+    ctx.fillText(`LVL ${player.level} | 🔥 FIRE CLASS | 💰 ${player.gold}`, 20, 50);
+}
+
+function drawOverlayMessage() {
+    ctx.fillStyle = 'rgba(0,0,0,0.85)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = '#ffcc00';
+    ctx.textAlign = 'center';
+    ctx.font = "bold 40px monospace";
+    ctx.fillText(currentMessage.title, canvas.width / 2, canvas.height / 2 - 20);
+    
+    ctx.fillStyle = 'white';
+    ctx.font = "20px monospace";
+    ctx.fillText(currentMessage.body, canvas.width / 2, canvas.height / 2 + 30);
+    
+    ctx.fillStyle = '#00ffcc';
+    ctx.fillText("Press ANY KEY to Continue", canvas.width / 2, canvas.height / 2 + 100);
+}
