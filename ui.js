@@ -1,3 +1,4 @@
+// ui.js
 export function drawHUD(ctx, canvas, player) {
     // HP Bar
     ctx.fillStyle = 'rgba(0,0,0,0.7)'; 
@@ -41,4 +42,17 @@ export function drawOverlayMessage(ctx, canvas, message) {
     
     ctx.fillStyle = '#00ffcc';
     ctx.fillText("TAP OR CLICK TO CONTINUE", canvas.width / 2, canvas.height / 2 + 100);
+}
+
+export function drawHubZones(ctx, arenaSize) {
+    // Shop
+    ctx.fillStyle = 'rgba(255, 255, 0, 0.3)'; ctx.fillRect(-225, -25, 50, 50);
+    ctx.fillStyle = 'white'; ctx.fillText("🛒", -210, 10);
+    // Skills
+    ctx.fillStyle = 'rgba(0, 255, 0, 0.3)'; ctx.fillRect(-25, -225, 50, 50);
+    ctx.fillText("💪", -10, -190);
+    // Exit
+    ctx.fillStyle = 'rgba(0, 255, 255, 0.2)';
+    ctx.fillRect(arenaSize - 100, -arenaSize, 100, arenaSize*2);
+    ctx.fillText("EXIT ➡", arenaSize - 250, 0);
 }
