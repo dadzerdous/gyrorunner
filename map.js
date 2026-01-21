@@ -20,6 +20,17 @@ export class MapSystem {
         // Always make the last floor a Boss
         this.floors[totalFloors - 1] = ['Boss'];
     }
+    static generateHazards(arenaSize, count = 8) {
+        let hazards = [];
+        for (let i = 0; i < count; i++) {
+            hazards.push({
+                x: (Math.floor(Math.random() * (arenaSize * 2 / 50)) * 50) - arenaSize,
+                y: (Math.floor(Math.random() * (arenaSize * 2 / 50)) * 50) - arenaSize,
+                type: Math.random() > 0.5 ? 'BARRIER' : 'TRAP'
+            });
+        }
+        return hazards;
+    }
 
     getNextOptions() {
         this.currentFloorIndex++;
