@@ -13,14 +13,25 @@
 <body>
     <div id="ui-layer">
 <div id="char-select" class="menu" style="display: flex;">
-    <h1 style="color: #ffcc00; text-shadow: 2px 2px #000;">CHOOSE YOUR AVATAR</h1>
-    <div class="char-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
-        <button onclick="selectElement('🔥')" style="font-size: 50px; background: rgba(255,255,255,0.1); border: 2px solid #ff4400; padding: 20px; cursor: pointer;">🔥</button>
-        <button onclick="selectElement('🐲')" style="font-size: 50px; background: rgba(255,255,255,0.1); border: 2px solid #ff4400; padding: 20px; cursor: pointer;">🐲</button>
-        <button onclick="selectElement('☄️')" style="font-size: 50px; background: rgba(255,255,255,0.1); border: 2px solid #ff4400; padding: 20px; cursor: pointer;">☄️</button>
-        <button onclick="selectElement('🧨')" style="font-size: 50px; background: rgba(255,255,255,0.1); border: 2px solid #ff4400; padding: 20px; cursor: pointer;">🧨</button>
+    <h1 style="color: #ffcc00; text-shadow: 2px 2px #000;">CHOOSE YOUR HERO</h1>
+    <div class="char-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+        
+        <button onclick="selectElement('🧙', 'fire')" style="background: rgba(0,0,0,0.5); border: 2px solid orange; padding: 20px; cursor: pointer;">
+            <div style="font-size: 50px;">🧙</div>
+            <div style="color: orange; font-family: monospace;">PYRO</div>
+        </button>
+
+        <button onclick="selectElement('🧛', 'blood')" style="background: rgba(0,0,0,0.5); border: 2px solid red; padding: 20px; cursor: pointer;">
+            <div style="font-size: 50px;">🧛</div>
+            <div style="color: red; font-family: monospace;">BLOOD</div>
+        </button>
+
+        <button onclick="selectElement('🧟', 'plague')" style="background: rgba(0,0,0,0.5); border: 2px solid #00ff00; padding: 20px; cursor: pointer;">
+            <div style="font-size: 50px;">🧟</div>
+            <div style="color: #00ff00; font-family: monospace;">ROT</div>
+        </button>
+
     </div>
-    <p style="color: #ff4400; margin-top: 20px;">All avatars currently use FIRE CLASS skills.</p>
 </div>
         <div id="hud">Wave: 1 | HP: 10</div>
         <div id="upgrade-menu" class="menu">
