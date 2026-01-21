@@ -12,14 +12,15 @@
 </head>
 <body>
     <div id="ui-layer">
-        <div id="char-select" class="menu" style="display: flex;">
-    <h1>CHOOSE YOUR ELEMENT</h1>
-    <div class="char-grid">
-        <button onclick="selectElement('fire')" style="color: orange;">FIRE</button>
-        <button onclick="selectElement('water')" style="color: cyan;">WATER</button>
-        <button onclick="selectElement('earth')" style="color: #8B4513;">EARTH</button>
-        <button onclick="selectElement('wind')" style="color: #ADFF2F;">WIND</button>
+<div id="char-select" class="menu" style="display: flex;">
+    <h1 style="color: #ffcc00; text-shadow: 2px 2px #000;">CHOOSE YOUR AVATAR</h1>
+    <div class="char-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
+        <button onclick="selectElement('🔥')" style="font-size: 50px; background: rgba(255,255,255,0.1); border: 2px solid #ff4400; padding: 20px; cursor: pointer;">🔥</button>
+        <button onclick="selectElement('🐲')" style="font-size: 50px; background: rgba(255,255,255,0.1); border: 2px solid #ff4400; padding: 20px; cursor: pointer;">🐲</button>
+        <button onclick="selectElement('☄️')" style="font-size: 50px; background: rgba(255,255,255,0.1); border: 2px solid #ff4400; padding: 20px; cursor: pointer;">☄️</button>
+        <button onclick="selectElement('🧨')" style="font-size: 50px; background: rgba(255,255,255,0.1); border: 2px solid #ff4400; padding: 20px; cursor: pointer;">🧨</button>
     </div>
+    <p style="color: #ff4400; margin-top: 20px;">All avatars currently use FIRE CLASS skills.</p>
 </div>
         <div id="hud">Wave: 1 | HP: 10</div>
         <div id="upgrade-menu" class="menu">
