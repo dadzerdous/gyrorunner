@@ -79,6 +79,11 @@ window.closeMenus = () => {
     document.getElementById('skill-menu').style.display = 'none';
     gameState = 'WAVE'; // Resume moving
 };
+window.showAnnouncement = (title, body) => {
+    currentMessage.title = title;
+    currentMessage.body = body;
+    gameState = 'MESSAGE';
+};
 
 function updateMenuUI() {
     document.getElementById('shop-gold').innerText = player.gold;
@@ -210,6 +215,11 @@ function draw() {
 
     drawHUD(ctx, canvas, player);
     if (gameState === 'WAVE' || serverPhase === 'WAVE') drawSkillBar(ctx, canvas, player);
+    if (gameState === 'MESSAGE') {
+    drawOverlayMessage(ctx, canvas, currentMessage);
+    return;
+}
+
     drawQuitButton(ctx, canvas);
     drawTicker(ctx, canvas, tickerMsg);
 }
@@ -223,7 +233,11 @@ window.addEventListener('mousedown', (e) => {
         if (Math.hypot(player.x - (-200), player.y) < 60) openShop();
         if (Math.hypot(player.x - 200, player.y) < 60) openSkills();
     }
-    
+    if (gameState === 'MESSAGE') {
+    gameState = 'WAVE';
+    return;
+}
+
     // Quit Button
     const rect = canvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
