@@ -42,7 +42,6 @@ window.selectElement = (emoji, type) => {
     }
     
     // 3. Connect to server
-    // (Ensure you have connectNet imported!)
     connectNet(); 
 
     document.getElementById('char-select').style.display = 'none';
@@ -111,18 +110,16 @@ function update(time) {
     const pRadius = 20;
 
     // --- NEW: ABILITY INPUTS ---
-    // This connects your 1-4 keys to the AbilitySystem
     if (input.keys['Digit1']) abilitySys.tryTriggerSkill(0, remoteEnemies, shockwaves, sendHit);
     if (input.keys['Digit2']) abilitySys.tryTriggerSkill(1, remoteEnemies, shockwaves, sendHit);
     if (input.keys['Digit3']) abilitySys.tryTriggerSkill(2, remoteEnemies, shockwaves, sendHit);
     if (input.keys['Digit4']) abilitySys.tryTriggerSkill(3, remoteEnemies, shockwaves, sendHit);
 
     // --- NEW: SHOCKWAVE UPDATES ---
-    // This animates the visual effects
     for (let i = shockwaves.length - 1; i >= 0; i--) {
         let s = shockwaves[i];
-        s.r += 2; // Expand
-        s.alpha -= 0.05; // Fade out
+        s.r += 2;
+        s.alpha -= 0.05;
         if (s.alpha <= 0) shockwaves.splice(i, 1);
     }
 
@@ -200,14 +197,12 @@ function draw() {
     }
 
     // --- NEW: BORDER ---
-    // Draws a solid red line around the arena
     ctx.lineWidth = 5;
     ctx.strokeStyle = '#ff0044';
     ctx.strokeRect(-arenaSize, -arenaSize, arenaSize * 2, arenaSize * 2);
     ctx.lineWidth = 1;
 
     // --- NEW: SHOCKWAVES ---
-    // Draws the ability effects
     shockwaves.forEach(s => {
         ctx.save();
         ctx.strokeStyle = s.color || 'white';
@@ -242,7 +237,6 @@ function draw() {
         });
         
         // --- NEW: PROJECTILES ---
-        // Draws your bullets
         combat.projectiles.forEach(p => {
             ctx.fillStyle = p.color || 'yellow';
             ctx.beginPath();
@@ -268,6 +262,29 @@ function draw() {
     drawQuitButton(ctx, canvas);
     drawTicker(ctx, canvas, tickerMsg);
 }
+
+// Global Click for Interacting
+window.addEventListener('mousedown', (e) => {
+    // Check Shop/Skill Click interaction if in Hub
+    if (serverPhase === 'HUB') {
+        if (Math.hypot(player.x - (-200), player.y) < 60) openShop();
+        if (Math.hypot(player.x - 200, player.y) < 60) openSkills();
+    }
+    if (gameState === 'MESSAGE') {
+        gameState = 'WAVE';
+        return;
+    }
+
+    // Quit Button
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    if (quitButton && mx > quitButton.x && mx < quitButton.x + quitButton.w && my > quitButton.y && my < quitButton.y + quitButton.h) {
+        player.saveProfile();
+        disconnectNet();
+        location.reload();
+    }
+});
 
 function ticker(t) { update(t); draw(); requestAnimationFrame(ticker); }
 window.triggerTicker = (text) => { tickerMsg.text = text; tickerMsg.x = canvas.width; };
