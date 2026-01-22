@@ -1,18 +1,16 @@
-import { connectNet, disconnectNet, sendMove, sendHit, sendReady, remoteEnemies, remotePlayers, portal, serverPhase, myId } from "./net.js"; // Added disconnectNet
+import { connectNet, disconnectNet, sendMove, sendHit, sendReady, remoteEnemies, remotePlayers, portal, serverPhase, myId } from "./net.js";
 import { Player } from './entities.js';
 import { InputHandler } from './input.js';
 import { CombatSystem, AbilitySystem } from './systems.js';
 import { MapSystem } from './map.js';
-import { drawHUD, drawTicker, drawOverlayMessage, drawHubZones, drawSkillBar, drawPortal, drawQuitButton, skillButtons, quitButton } from './ui.js';
-
-// Removed auto connectNet() at top - we connect when game starts
+import { drawHUD, drawTicker, drawOverlayMessage, drawSkillBar, drawPortal, drawQuitButton, skillButtons, quitButton } from './ui.js';
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth; canvas.height = window.innerHeight;
 
 const input = new InputHandler();
-const player = new Player(); // Loads default
+const player = new Player();
 const combat = new CombatSystem();
 const abilitySys = new AbilitySystem(player);
 
@@ -23,102 +21,96 @@ let hazards = [];
 let tickerMsg = { text: "", x: canvas.width }; 
 let currentMessage = { title: "", body: "" };
 
-// Show the menu on load
+// Show Char Select
 document.getElementById('char-select').style.display = 'flex';
 
+// --- MENU FUNCTIONS (Exposed to HTML) ---
 window.selectElement = (emoji, type) => {
-    // 1. Load Save if exists (Before setting defaults)
-    const loaded = player.loadProfile();
-    
-    // 2. Apply Selection Overrides (Only if not loaded, or update visual avatar)
-    if (!loaded) {
-        player.avatar = emoji; 
-        player.element = 'fire'; 
-        if (type === 'blood') { player.weapons[0].color = '#ff0000'; player.weapons[0].damage = 5; } 
-        else if (type === 'plague') { player.weapons[0].color = '#00ff00'; player.weapons[0].fireRate = 800; } 
-        else { player.weapons[0].color = 'orange'; }
-    } else {
-        // If loaded, just update the avatar to match what they clicked (optional) or keep save
-        player.avatar = emoji; // Let them look like what they clicked even if stats are loaded
-        window.triggerTicker("WELCOME BACK " + emoji);
-    }
-    
-    // 3. Connect and Start
+    player.loadProfile(); 
+    player.avatar = emoji; 
+    player.element = 'fire'; 
+    if (type === 'blood') { player.weapons[0].color = 'red'; player.weapons[0].damage = 5; }
     connectNet();
     document.getElementById('char-select').style.display = 'none';
-    hazards = MapSystem.generateHazards(arenaSize); 
-    
-    if (!loaded) showAnnouncement("ASCENSION BEGINS", "Reach Floor 10 to survive.");
-    else showAnnouncement("RESUMING RUN", "Floor progress reset. Stats saved.");
+    hazards = MapSystem.generateHazards(arenaSize);
+    gameState = 'WAVE';
 };
 
-function showAnnouncement(title, body) {
-    currentMessage = { title, body };
-    gameState = 'MESSAGE';
+window.buyItem = (type) => {
+    if (type === 'potion' && player.gold >= 50) {
+        player.gold -= 50; player.hp = Math.min(player.hp + 5, player.maxHp);
+        window.triggerTicker("❤️ HEALED!");
+    }
+    if (type === 'damage' && player.gold >= 100) {
+        player.gold -= 100; player.weapons[0].damage += 1;
+        window.triggerTicker("⚔️ DAMAGE UPGRADED!");
+    }
+    updateMenuUI();
+};
+
+window.upgradeSkill = (key) => {
+    if (player.skillPoints >= 1) {
+        player.skillPoints--;
+        player.skills[key].unlocked = true;
+        player.skills[key].maxCD = Math.max(50, player.skills[key].maxCD - 20); // Reduce CD
+        window.triggerTicker(`UPGRADED ${key.toUpperCase()}`);
+    }
+    updateMenuUI();
+};
+
+window.closeMenus = () => {
+    document.getElementById('shop-menu').style.display = 'none';
+    document.getElementById('skill-menu').style.display = 'none';
+    gameState = 'WAVE'; // Resume moving
+};
+
+function updateMenuUI() {
+    document.getElementById('shop-gold').innerText = player.gold;
+    document.getElementById('skill-points').innerText = player.skillPoints;
 }
 
-function handleGlobalClick(e) {
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-    const mouseY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-
-    // 1. Message Dismiss
-    if (gameState === 'MESSAGE') {
-        gameState = 'WAVE';
-        window.triggerTicker("SURVIVE THE WAVES");
-        return;
-    }
-
-    // 2. Quit Button (Top Right) - Only during active gameplay
-    if ((gameState === 'WAVE' || serverPhase === 'WAVE' || serverPhase === 'HUB') && quitButton) {
-         if (mouseX >= quitButton.x && mouseX <= quitButton.x + quitButton.w &&
-             mouseY >= quitButton.y && mouseY <= quitButton.y + quitButton.h) {
-             
-             // SAVE & QUIT Logic
-             player.saveProfile();
-             disconnectNet();
-             gameState = 'START';
-             document.getElementById('char-select').style.display = 'flex';
-             return;
-         }
-    }
-
-    // 3. Skill Buttons
-    if (gameState === 'WAVE' || serverPhase === 'WAVE') {
-        skillButtons.forEach((btn, index) => {
-            if (btn.rect && 
-                mouseX >= btn.rect.x && mouseX <= btn.rect.x + btn.rect.w &&
-                mouseY >= btn.rect.y && mouseY <= btn.rect.y + btn.rect.h) {
-                abilitySys.tryTriggerSkill(index, remoteEnemies, shockwaves, sendHit);
-            }
-        });
-    }
-}
-
-window.triggerTicker = (text) => { tickerMsg.text = text; tickerMsg.x = canvas.width; };
-
+// --- MAIN LOOP ---
 function update(time) {
-    if (gameState === 'MESSAGE' || gameState === 'START') return;
+    if (gameState === 'MESSAGE' || gameState === 'START' || gameState === 'MENU') return;
+
+    // Ticker & Level Up
     if (tickerMsg.text) { tickerMsg.x -= 3; if (tickerMsg.x < -1000) tickerMsg.text = ""; }
     if (player.xp >= player.xpToNext) {
-        levelUp();
-        player.saveProfile(); // Auto-save on level up
+        player.level++; player.xp = 0; player.xpToNext *= 1.2; player.skillPoints++;
+        window.triggerTicker("LEVEL UP! +1 SP");
+        player.saveProfile();
     }
     Object.values(player.skills).forEach(s => { if (s.cooldown > 0) s.cooldown--; });
-    
+
+    // Movement
     const move = input.getMovement();
     if (move.x !== 0 || move.y !== 0) player.currentDir = move;
-    
     let nextX = player.x + move.x * player.speed;
     let nextY = player.y + move.y * player.speed;
-    const pRadius = 20; 
+    const pRadius = 20;
 
+    // --- PHASE LOGIC ---
     if (serverPhase === 'HUB') {
-        checkHubInteractions(player.x, player.y);
-        if (player.x > arenaSize - 50) { sendReady(true); window.triggerTicker("WAITING FOR TEAM..."); } 
-        else { sendReady(false); }
+        // 1. Shop Zone (-200, 0)
+        if (Math.hypot(player.x - (-200), player.y) < 60) {
+            window.triggerTicker("PRESS [E] OR CLICK TO SHOP");
+            if (input.keys['KeyE']) openShop();
+        }
+        // 2. Skill Zone (200, 0)
+        if (Math.hypot(player.x - 200, player.y) < 60) {
+            window.triggerTicker("PRESS [E] OR CLICK FOR SKILLS");
+            if (input.keys['KeyE']) openSkills();
+        }
+        // 3. Exit Zone (Top Edge)
+        if (player.y < -arenaSize + 100) {
+            sendReady(true); window.triggerTicker("WAITING FOR TEAM TO EXIT...");
+        } else {
+            sendReady(false);
+        }
+
         player.x = nextX; player.y = nextY;
-    } else { 
+    } 
+    else { // WAVE
         let hitBarrier = false;
         hazards.forEach(h => {
             if (nextX + pRadius > h.x && nextX - pRadius < h.x + 50 &&
@@ -128,112 +120,105 @@ function update(time) {
             }
         });
         if (!hitBarrier) { player.x = nextX; player.y = nextY; }
-        
-        if (portal) {
-            if (Math.hypot(player.x - portal.x, player.y - portal.y) < 50) {
-                 sendReady(true); window.triggerTicker("WAITING AT PORTAL...");
-            } else { sendReady(false); }
-        }
+
+        if (portal && Math.hypot(player.x - portal.x, player.y - portal.y) < 50) sendReady(true);
+        else sendReady(false);
     }
 
+    // Clamp & Sync
     player.x = Math.max(-arenaSize + pRadius, Math.min(arenaSize - pRadius, player.x));
     player.y = Math.max(-arenaSize + pRadius, Math.min(arenaSize - pRadius, player.y));
     sendMove(player.x, player.y);
 
-    if (serverPhase === 'WAVE') combat.updateWeapons(player, remoteEnemies, time);
-    combat.updateProjectiles(remoteEnemies, arenaSize, sendHit, player);
+    if (serverPhase === 'WAVE') {
+        combat.updateWeapons(player, remoteEnemies, time);
+        combat.updateProjectiles(remoteEnemies, arenaSize, sendHit, player);
+    }
 }
 
-function checkHubInteractions(x, y) {
-    if (Math.hypot(x - (-200), y - 0) < 50) window.triggerTicker("🛒 SHOP ZONE");
-    if (Math.hypot(x - 0, y - (-200)) < 50) window.triggerTicker("💪 TRAINER ZONE");
+function openShop() {
+    gameState = 'MENU';
+    updateMenuUI();
+    document.getElementById('shop-menu').style.display = 'flex';
 }
 
-function levelUp() {
-    player.level++; player.xp = 0; player.xpToNext *= 1.2; player.skillPoints += 1;
-    window.triggerTicker(`⚡ LEVEL UP! NOW LEVEL ${player.level} ⚡`);
-    if (player.level === 3) { player.skills.flameDash.unlocked = true; window.triggerTicker("UNLOCKED: FLAME DASH"); }
-    if (player.level === 5) { player.keystones.chainExplosions = true; window.triggerTicker("KEYSTONE ACTIVE"); }
-    if (player.level === 6) { player.skills.moltenGuard.unlocked = true; window.triggerTicker("UNLOCKED: MOLTEN GUARD"); }
-    if (player.level === 9) { player.skills.inferno.unlocked = true; window.triggerTicker("UNLOCKED: INFERNO"); }
+function openSkills() {
+    gameState = 'MENU';
+    updateMenuUI();
+    document.getElementById('skill-menu').style.display = 'flex';
 }
 
 function draw() {
-    ctx.fillStyle = '#050208'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    if (gameState === 'START') {
-        // Stop drawing game when in menu
-        return; 
-    }
+    ctx.fillStyle = '#111'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (gameState === 'START') return;
 
     ctx.save();
     ctx.translate(canvas.width / 2 - player.x, canvas.height / 2 - player.y);
 
-    ctx.strokeStyle = '#2a1b4d'; 
+    // Floor Grid
+    ctx.strokeStyle = serverPhase === 'HUB' ? '#444' : '#2a1b4d';
     for (let i = -arenaSize; i <= arenaSize; i += 50) {
         ctx.beginPath(); ctx.moveTo(i, -arenaSize); ctx.lineTo(i, arenaSize); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(-arenaSize, i); ctx.lineTo(arenaSize, i); ctx.stroke();
     }
 
-    shockwaves.forEach(sw => {
-        sw.r += 5; sw.alpha -= 0.05;
-        ctx.beginPath(); ctx.arc(sw.x, sw.y, sw.r, 0, Math.PI * 2);
-        ctx.fillStyle = sw.color || 'orange'; ctx.globalAlpha = Math.max(0, sw.alpha);
-        ctx.fill(); ctx.globalAlpha = 1.0;
-    });
-    shockwaves = shockwaves.filter(sw => sw.alpha > 0);
-
     if (serverPhase === 'HUB') {
-        drawHubZones(ctx, arenaSize);
+        // Draw Hub Zones
+        ctx.fillStyle = 'rgba(255, 215, 0, 0.3)'; ctx.fillRect(-230, -30, 60, 60); // Shop
+        ctx.fillStyle = 'white'; ctx.fillText("🛒 SHOP", -220, -40);
+
+        ctx.fillStyle = 'rgba(0, 255, 200, 0.3)'; ctx.fillRect(170, -30, 60, 60); // Skills
+        ctx.fillText("💪 SKILLS", 180, -40);
+
+        ctx.fillStyle = 'rgba(0, 100, 255, 0.3)'; ctx.fillRect(-100, -arenaSize, 200, 80); // Exit
+        ctx.fillText("EXIT ⬆️", -20, -arenaSize + 100);
     } else {
+        // Wave Stuff (Hazards, Enemies, Portal)
         hazards.forEach(h => {
-            if (h.type === 'BARRIER') {
-                ctx.fillStyle = '#3a3a4d'; ctx.fillRect(h.x + 2, h.y + 2, 46, 46);
-                ctx.strokeStyle = '#555'; ctx.strokeRect(h.x + 2, h.y + 2, 46, 46);
-            } else if (h.type === 'TRAP') {
-                ctx.fillStyle = 'rgba(255, 68, 0, 0.3)'; ctx.fillRect(h.x, h.y, 50, 50);
-                ctx.fillText('🔥', h.x + 25, h.y + 35);
-            }
+             ctx.fillStyle = h.type === 'BARRIER' ? '#555' : 'rgba(255,0,0,0.3)';
+             ctx.fillRect(h.x, h.y, 50, 50);
         });
-        if (portal) drawPortal(ctx, portal);
+        if (portal) drawPortal(ctx, portal); // Use ui.js portal
         remoteEnemies.forEach(en => {
-            ctx.font = '28px serif'; ctx.textAlign = 'center';
-            ctx.fillText(en.type === 'archer' ? '🏹' : '🧟', en.x, en.y + 10);
-            ctx.fillStyle = 'red'; ctx.fillRect(en.x - 15, en.y - 25, 30 * (en.hp / 3), 4);
+            ctx.fillText(en.type === 'archer' ? '🏹' : '🧟', en.x, en.y);
+            ctx.fillStyle = 'red'; ctx.fillRect(en.x-15, en.y-20, 30*(en.hp/3), 4);
         });
     }
-
-    ctx.lineWidth = 5; ctx.strokeStyle = '#ff0044'; 
-    ctx.shadowBlur = 20; ctx.shadowColor = '#ff0044';
-    ctx.strokeRect(-arenaSize, -arenaSize, arenaSize * 2, arenaSize * 2);
-    ctx.shadowBlur = 0; ctx.lineWidth = 1;
-
-    combat.projectiles.forEach(p => {
-        ctx.fillStyle = p.color || '#ffffff'; ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
-    });
-
+    
+    // Players
     Object.entries(remotePlayers).forEach(([id, p]) => {
-        if (!myId || id === myId) return; 
-        ctx.font = "28px serif"; ctx.fillText("🧙", p.x, p.y + 10);
-        ctx.font = "12px monospace"; ctx.fillStyle = "white"; ctx.fillText(id.substring(0, 4), p.x, p.y - 15);
+        if (id !== myId) ctx.fillText("🧙", p.x, p.y);
     });
-
-    let scale = player.isJumping ? 1.6 : 1;
-    ctx.font = (32 * scale) + 'px serif';
-    ctx.fillText(player.avatar || '🧛', player.x, player.y + 12);
+    ctx.fillText(player.avatar, player.x, player.y);
     ctx.restore();
 
-    // UI DRAWING - HUD IS ALWAYS HERE
     drawHUD(ctx, canvas, player);
     if (gameState === 'WAVE' || serverPhase === 'WAVE') drawSkillBar(ctx, canvas, player);
-    drawQuitButton(ctx, canvas); // Always draw quit button when playing
-    
+    drawQuitButton(ctx, canvas);
     drawTicker(ctx, canvas, tickerMsg);
-    if (gameState === 'MESSAGE') drawOverlayMessage(ctx, canvas, currentMessage);
 }
 
-function ticker(time) { update(time); draw(); requestAnimationFrame(ticker); }
-requestAnimationFrame(ticker);
+// Global Click for Interacting
+window.addEventListener('mousedown', (e) => {
+    // Check Shop/Skill Click interaction if in Hub
+    if (serverPhase === 'HUB') {
+        // Calculate world coordinates if you want click-to-move or click-to-interact
+        // For now, simpler: If near zone, clicking anywhere opens it
+        if (Math.hypot(player.x - (-200), player.y) < 60) openShop();
+        if (Math.hypot(player.x - 200, player.y) < 60) openSkills();
+    }
+    
+    // Quit Button
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    if (quitButton && mx > quitButton.x && mx < quitButton.x + quitButton.w && my > quitButton.y && my < quitButton.y + quitButton.h) {
+        player.saveProfile();
+        disconnectNet();
+        location.reload();
+    }
+});
 
-window.addEventListener('mousedown', handleGlobalClick);
-window.addEventListener('touchstart', handleGlobalClick);
+function ticker(t) { update(t); draw(); requestAnimationFrame(ticker); }
+window.triggerTicker = (text) => { tickerMsg.text = text; tickerMsg.x = canvas.width; };
+requestAnimationFrame(ticker);
