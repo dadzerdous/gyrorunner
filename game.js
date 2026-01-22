@@ -110,6 +110,22 @@ function update(time) {
     let nextY = player.y + move.y * player.speed;
     const pRadius = 20;
 
+    // --- NEW: ABILITY INPUTS ---
+    // This connects your 1-4 keys to the AbilitySystem
+    if (input.keys['Digit1']) abilitySys.tryTriggerSkill(0, remoteEnemies, shockwaves, sendHit);
+    if (input.keys['Digit2']) abilitySys.tryTriggerSkill(1, remoteEnemies, shockwaves, sendHit);
+    if (input.keys['Digit3']) abilitySys.tryTriggerSkill(2, remoteEnemies, shockwaves, sendHit);
+    if (input.keys['Digit4']) abilitySys.tryTriggerSkill(3, remoteEnemies, shockwaves, sendHit);
+
+    // --- NEW: SHOCKWAVE UPDATES ---
+    // This animates the visual effects
+    for (let i = shockwaves.length - 1; i >= 0; i--) {
+        let s = shockwaves[i];
+        s.r += 2; // Expand
+        s.alpha -= 0.05; // Fade out
+        if (s.alpha <= 0) shockwaves.splice(i, 1);
+    }
+
     // --- PHASE LOGIC ---
     if (serverPhase === 'HUB') {
         // 1. Shop Zone (-200, 0)
@@ -183,6 +199,26 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(-arenaSize, i); ctx.lineTo(arenaSize, i); ctx.stroke();
     }
 
+    // --- NEW: BORDER ---
+    // Draws a solid red line around the arena
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = '#ff0044';
+    ctx.strokeRect(-arenaSize, -arenaSize, arenaSize * 2, arenaSize * 2);
+    ctx.lineWidth = 1;
+
+    // --- NEW: SHOCKWAVES ---
+    // Draws the ability effects
+    shockwaves.forEach(s => {
+        ctx.save();
+        ctx.strokeStyle = s.color || 'white';
+        ctx.lineWidth = 4;
+        ctx.globalAlpha = s.alpha;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+    });
+
     if (serverPhase === 'HUB') {
         // Draw Hub Zones
         ctx.fillStyle = 'rgba(255, 215, 0, 0.3)'; ctx.fillRect(-230, -30, 60, 60); // Shop
@@ -199,10 +235,19 @@ function draw() {
              ctx.fillStyle = h.type === 'BARRIER' ? '#555' : 'rgba(255,0,0,0.3)';
              ctx.fillRect(h.x, h.y, 50, 50);
         });
-        if (portal) drawPortal(ctx, portal); // Use ui.js portal
+        if (portal) drawPortal(ctx, portal); 
         remoteEnemies.forEach(en => {
             ctx.fillText(en.type === 'archer' ? '🏹' : '🧟', en.x, en.y);
             ctx.fillStyle = 'red'; ctx.fillRect(en.x-15, en.y-20, 30*(en.hp/3), 4);
+        });
+        
+        // --- NEW: PROJECTILES ---
+        // Draws your bullets
+        combat.projectiles.forEach(p => {
+            ctx.fillStyle = p.color || 'yellow';
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+            ctx.fill();
         });
     }
     
@@ -216,38 +261,13 @@ function draw() {
     drawHUD(ctx, canvas, player);
     if (gameState === 'WAVE' || serverPhase === 'WAVE') drawSkillBar(ctx, canvas, player);
     if (gameState === 'MESSAGE') {
-    drawOverlayMessage(ctx, canvas, currentMessage);
-    return;
-}
+        drawOverlayMessage(ctx, canvas, currentMessage);
+        return;
+    }
 
     drawQuitButton(ctx, canvas);
     drawTicker(ctx, canvas, tickerMsg);
 }
-
-// Global Click for Interacting
-window.addEventListener('mousedown', (e) => {
-    // Check Shop/Skill Click interaction if in Hub
-    if (serverPhase === 'HUB') {
-        // Calculate world coordinates if you want click-to-move or click-to-interact
-        // For now, simpler: If near zone, clicking anywhere opens it
-        if (Math.hypot(player.x - (-200), player.y) < 60) openShop();
-        if (Math.hypot(player.x - 200, player.y) < 60) openSkills();
-    }
-    if (gameState === 'MESSAGE') {
-    gameState = 'WAVE';
-    return;
-}
-
-    // Quit Button
-    const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    if (quitButton && mx > quitButton.x && mx < quitButton.x + quitButton.w && my > quitButton.y && my < quitButton.y + quitButton.h) {
-        player.saveProfile();
-        disconnectNet();
-        location.reload();
-    }
-});
 
 function ticker(t) { update(t); draw(); requestAnimationFrame(ticker); }
 window.triggerTicker = (text) => { tickerMsg.text = text; tickerMsg.x = canvas.width; };
