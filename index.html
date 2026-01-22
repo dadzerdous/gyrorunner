@@ -2,49 +2,75 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Spirep100</title>
+    <title>Spire Online</title>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', monospace; }
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', monospace; color: white; }
         #ui-layer { position: absolute; top: 0; width: 100%; height: 100%; pointer-events: none; }
-        .menu { pointer-events: all; display: none; background: rgba(0,0,0,0.9); height: 100%; flex-direction: column; align-items: center; justify-content: center; }
+        .menu { pointer-events: all; display: none; background: rgba(0,0,0,0.95); height: 100%; flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
+        .hud-btn { pointer-events: all; border: 2px solid white; background: rgba(0,0,0,0.5); color: white; padding: 10px; cursor: pointer; font-family: inherit; font-weight: bold; }
+        .hud-btn:hover { background: white; color: black; }
+        
+        /* Shop & Skill Grid Styles */
+        .shop-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; text-align: center; }
+        .shop-item { border: 1px solid #444; padding: 20px; transition: 0.2s; }
+        .shop-item:hover { border-color: yellow; background: #222; }
+        .buy-btn { background: gold; color: black; border: none; padding: 5px 15px; cursor: pointer; margin-top: 10px; }
+        
+        .skill-item { border: 1px solid #444; padding: 20px; }
+        .skill-btn { background: #00ffcc; color: black; border: none; padding: 5px 15px; cursor: pointer; margin-top: 10px; }
+        
         canvas { display: block; }
     </style>
 </head>
 <body>
     <div id="ui-layer">
-<div id="char-select" class="menu" style="display: flex;">
-    <h1 style="color: #ffcc00; text-shadow: 2px 2px #000;">CHOOSE YOUR HERO</h1>
-    <div class="char-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
-        
-        <button onclick="selectElement('🧙', 'fire')" style="background: rgba(0,0,0,0.5); border: 2px solid orange; padding: 20px; cursor: pointer;">
-            <div style="font-size: 50px;">🧙</div>
-            <div style="color: orange; font-family: monospace;">PYRO</div>
-        </button>
-
-        <button onclick="selectElement('🧛', 'blood')" style="background: rgba(0,0,0,0.5); border: 2px solid red; padding: 20px; cursor: pointer;">
-            <div style="font-size: 50px;">🧛</div>
-            <div style="color: red; font-family: monospace;">BLOOD</div>
-        </button>
-
-        <button onclick="selectElement('🧟', 'plague')" style="background: rgba(0,0,0,0.5); border: 2px solid #00ff00; padding: 20px; cursor: pointer;">
-            <div style="font-size: 50px;">🧟</div>
-            <div style="color: #00ff00; font-family: monospace;">ROT</div>
-        </button>
-
-    </div>
-</div>
-        <div id="hud">Wave: 1 | HP: 10</div>
-        <div id="upgrade-menu" class="menu">
-            <h1>SELECT UPGRADE</h1>
-            <div id="upgrade-choices"></div>
+        <div id="char-select" class="menu" style="display: flex;">
+            <h1 style="color: #ffcc00;">CHOOSE YOUR HERO</h1>
+            <div class="shop-grid">
+                <button onclick="selectElement('🧙', 'fire')" class="hud-btn" style="font-size: 40px;">🧙<br>PYRO</button>
+                <button onclick="selectElement('🧛', 'blood')" class="hud-btn" style="font-size: 40px;">🧛<br>BLOOD</button>
+                <button onclick="selectElement('🧟', 'plague')" class="hud-btn" style="font-size: 40px;">🧟<br>ROT</button>
+            </div>
         </div>
-        <div id="room-menu" class="menu">
-            <h1>CHOOSE YOUR PATH</h1>
-            <div id="room-choices"></div>
+
+        <div id="shop-menu" class="menu">
+            <h1 style="color: yellow;">MERCHANT</h1>
+            <p>Gold: <span id="shop-gold">0</span></p>
+            <div class="shop-grid">
+                <div class="shop-item">
+                    <h3>❤️ Potion</h3>
+                    <p>Heal 5 HP</p>
+                    <button class="buy-btn" onclick="buyItem('potion')">50g</button>
+                </div>
+                <div class="shop-item">
+                    <h3>⚔️ Sharpen</h3>
+                    <p>+1 Damage</p>
+                    <button class="buy-btn" onclick="buyItem('damage')">100g</button>
+                </div>
+            </div>
+            <button class="hud-btn" style="margin-top: 30px;" onclick="closeMenus()">LEAVE SHOP</button>
+        </div>
+
+        <div id="skill-menu" class="menu">
+            <h1 style="color: #00ffcc;">TRAINER</h1>
+            <p>Skill Points: <span id="skill-points">0</span></p>
+            <div class="shop-grid">
+                <div class="skill-item">
+                    <h3>💨 Flame Dash</h3>
+                    <p>Unlock/Upgrade</p>
+                    <button class="skill-btn" onclick="upgradeSkill('flameDash')">1 SP</button>
+                </div>
+                <div class="skill-item">
+                    <h3>🛡 Molten Guard</h3>
+                    <p>Unlock/Upgrade</p>
+                    <button class="skill-btn" onclick="upgradeSkill('moltenGuard')">1 SP</button>
+                </div>
+            </div>
+            <button class="hud-btn" style="margin-top: 30px;" onclick="closeMenus()">LEAVE TRAINER</button>
         </div>
     </div>
+
     <canvas id="gameCanvas"></canvas>
-
     <script type="module" src="game.js"></script>
 </body>
 </html>
