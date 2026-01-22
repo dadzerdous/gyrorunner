@@ -1,4 +1,3 @@
-// entities.js
 export class Player {
     constructor() {
         this.x = 0;
@@ -13,7 +12,7 @@ export class Player {
         this.hp = 10;
         this.maxHp = 10;
         this.speed = 3.5;
-        this.avatar = '🧙'; // Default
+        this.avatar = '🧙';
         
         this.weapons = [
             { name: "Starter Wand", damage: 2, fireRate: 1000, lastShot: 0, color: 'orange' }
@@ -26,13 +25,9 @@ export class Player {
             inferno: { unlocked: false, cooldown: 0, maxCD: 1000 }    
         };
         
-        this.keystones = {
-            chainExplosions: false, 
-            burnSpread: false      
-        };
+        this.keystones = { chainExplosions: false, burnSpread: false };
     }
 
-    // NEW: Save character progress
     saveProfile() {
         const data = {
             level: this.level,
@@ -40,18 +35,14 @@ export class Player {
             xpToNext: this.xpToNext,
             gold: this.gold,
             skillPoints: this.skillPoints,
-            skills: this.skills, // Save unlock states
-            keystones: this.keystones,
+            skills: this.skills,
             avatar: this.avatar,
-            element: this.element,
-            hp: this.hp, // Optional: save current HP or reset?
-            maxHp: this.maxHp
+            element: this.element
         };
         localStorage.setItem('spire_save', JSON.stringify(data));
-        console.log("Game Saved");
+        console.log("Progress Saved");
     }
 
-    // NEW: Load character progress
     loadProfile() {
         const json = localStorage.getItem('spire_save');
         if (json) {
@@ -63,17 +54,13 @@ export class Player {
             this.skillPoints = data.skillPoints;
             this.avatar = data.avatar || this.avatar;
             this.element = data.element || 'fire';
-            this.maxHp = data.maxHp;
             
-            // Merge Skills (keep cooldowns/functions, update unlocked status)
+            // Restore skills
             for (let key in data.skills) {
                 if (this.skills[key]) {
                     this.skills[key].unlocked = data.skills[key].unlocked;
                 }
             }
-            // Merge Keystones
-            this.keystones = data.keystones;
-            console.log("Save Loaded: Level " + this.level);
             return true;
         }
         return false;
