@@ -1,9 +1,11 @@
 // ui.js
 
-// CONFIG: Button Layout
 const ICON_SIZE = 50;
 const PADDING = 10;
-const HOTBAR_Y_OFFSET = 80; // Distance from bottom
+const HOTBAR_Y_OFFSET = 80;
+
+// Quit Button Config
+export const quitButton = { x: 0, y: 10, w: 80, h: 30, label: "QUIT" };
 
 export const skillButtons = [
     { key: 'fireBurst', label: '1', color: '#ff4400', icon: '🔥' },
@@ -21,17 +23,14 @@ export function drawSkillBar(ctx, canvas, player) {
         const x = startX + (index * (ICON_SIZE + PADDING));
         const skill = player.skills[btn.key];
         
-        // Store coordinates for mouse click detection
         btn.rect = { x, y, w: ICON_SIZE, h: ICON_SIZE };
 
-        // 1. Background / Frame
         ctx.fillStyle = 'rgba(0,0,0,0.8)';
         ctx.fillRect(x, y, ICON_SIZE, ICON_SIZE);
         ctx.strokeStyle = skill.unlocked ? '#666' : '#333';
         ctx.lineWidth = 2;
         ctx.strokeRect(x, y, ICON_SIZE, ICON_SIZE);
 
-        // 2. Icon
         if (skill.unlocked) {
             ctx.fillStyle = btn.color;
             ctx.font = "24px serif";
@@ -44,53 +43,57 @@ export function drawSkillBar(ctx, canvas, player) {
             ctx.fillText('🔒', x + ICON_SIZE/2, y + 32);
         }
 
-        // 3. Cooldown Overlay (The "Clock" Wipe)
         if (skill.cooldown > 0) {
             const ratio = skill.cooldown / skill.maxCD;
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
             ctx.fillRect(x, y + (ICON_SIZE * (1 - ratio)), ICON_SIZE, ICON_SIZE * ratio);
-            
-            // Cooldown Text
             ctx.fillStyle = 'white';
             ctx.font = "bold 14px monospace";
             ctx.fillText(Math.ceil(skill.cooldown / 20), x + ICON_SIZE/2, y + 30);
         }
 
-        // 4. Hotkey Label
         ctx.fillStyle = '#ffff00';
         ctx.font = "10px monospace";
         ctx.fillText(btn.label, x + ICON_SIZE - 8, y + 12);
     });
 }
 
-// NEW PORTAL VISUAL
+// NEW: Draw Quit Button (Top Right)
+export function drawQuitButton(ctx, canvas) {
+    quitButton.x = canvas.width - quitButton.w - 20; // Position Top Right
+    
+    ctx.fillStyle = 'rgba(255, 0, 0, 0.6)';
+    ctx.fillRect(quitButton.x, quitButton.y, quitButton.w, quitButton.h);
+    
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(quitButton.x, quitButton.y, quitButton.w, quitButton.h);
+
+    ctx.fillStyle = 'white';
+    ctx.font = "bold 16px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("QUIT", quitButton.x + quitButton.w / 2, quitButton.y + 20);
+}
+
 export function drawPortal(ctx, portal) {
     if (!portal) return;
-
-    // 1x1 Glowing Square (50x50)
     ctx.shadowBlur = 30;
     ctx.shadowColor = '#00ffff';
-    ctx.fillStyle = 'rgba(0, 255, 255, 0.2)'; // Faint center
+    ctx.fillStyle = 'rgba(0, 255, 255, 0.2)'; 
     ctx.fillRect(portal.x - 25, portal.y - 25, 50, 50);
-    
-    // Border
     ctx.strokeStyle = '#00ffff';
     ctx.lineWidth = 3;
     ctx.strokeRect(portal.x - 25, portal.y - 25, 50, 50);
-    
-    ctx.shadowBlur = 0; // Reset glow for text
-
-    // Text with Stroke (Border)
+    ctx.shadowBlur = 0;
     ctx.font = "bold 16px monospace";
     ctx.textAlign = "center";
     ctx.lineWidth = 3;
-    ctx.strokeStyle = 'black'; // Black Border
+    ctx.strokeStyle = 'black'; 
     ctx.strokeText("PORTAL", portal.x, portal.y - 35);
-    ctx.fillStyle = 'white';   // White Text
+    ctx.fillStyle = 'white';   
     ctx.fillText("PORTAL", portal.x, portal.y - 35);
 }
 
-// ... Keep drawHUD, drawTicker, drawOverlayMessage from previous step ...
 export function drawHUD(ctx, canvas, player) {
     // HP Bar
     ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(20, canvas.height - 40, 200, 20);
@@ -98,7 +101,7 @@ export function drawHUD(ctx, canvas, player) {
     // XP Bar
     ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.fillRect(20, 20, canvas.width - 40, 8);
     ctx.fillStyle = '#ffcc00'; ctx.fillRect(20, 20, (canvas.width - 40) * (player.xp / player.xpToNext), 8);
-    // Text Stats
+    // Stats
     ctx.fillStyle = '#00ffcc'; ctx.font = "bold 18px monospace"; ctx.textAlign = "left";
     ctx.fillText(`LVL ${player.level} | ${player.avatar || '?'} FIRE | 💰 ${player.gold}`, 20, 50);
 }
