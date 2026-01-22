@@ -9,36 +9,80 @@ export class Player {
         this.gold = 0;
         this.skillPoints = 0;
         
-        // Fire Class Progression
         this.element = 'fire';
         this.hp = 10;
         this.maxHp = 10;
         this.speed = 3.5;
+        this.avatar = '🧙'; // Default
         
         this.weapons = [
             { name: "Starter Wand", damage: 2, fireRate: 1000, lastShot: 0, color: 'orange' }
         ];
 
         this.skills = {
-            fireBurst: { unlocked: true, cooldown: 0, maxCD: 150 }, // Level 1
-            flameDash: { unlocked: false, cooldown: 0, maxCD: 200 }, // Level 3
-            moltenGuard: { unlocked: false, cooldown: 0, maxCD: 400 }, // Level 6
-            inferno: { unlocked: false, cooldown: 0, maxCD: 1000 }    // Level 9 (Ult)
+            fireBurst: { unlocked: true, cooldown: 0, maxCD: 150 }, 
+            flameDash: { unlocked: false, cooldown: 0, maxCD: 200 }, 
+            moltenGuard: { unlocked: false, cooldown: 0, maxCD: 400 }, 
+            inferno: { unlocked: false, cooldown: 0, maxCD: 1000 }    
         };
         
         this.keystones = {
-            chainExplosions: false, // Level 5
-            burnSpread: false      // Level 10
+            chainExplosions: false, 
+            burnSpread: false      
         };
+    }
+
+    // NEW: Save character progress
+    saveProfile() {
+        const data = {
+            level: this.level,
+            xp: this.xp,
+            xpToNext: this.xpToNext,
+            gold: this.gold,
+            skillPoints: this.skillPoints,
+            skills: this.skills, // Save unlock states
+            keystones: this.keystones,
+            avatar: this.avatar,
+            element: this.element,
+            hp: this.hp, // Optional: save current HP or reset?
+            maxHp: this.maxHp
+        };
+        localStorage.setItem('spire_save', JSON.stringify(data));
+        console.log("Game Saved");
+    }
+
+    // NEW: Load character progress
+    loadProfile() {
+        const json = localStorage.getItem('spire_save');
+        if (json) {
+            const data = JSON.parse(json);
+            this.level = data.level;
+            this.xp = data.xp;
+            this.xpToNext = data.xpToNext;
+            this.gold = data.gold;
+            this.skillPoints = data.skillPoints;
+            this.avatar = data.avatar || this.avatar;
+            this.element = data.element || 'fire';
+            this.maxHp = data.maxHp;
+            
+            // Merge Skills (keep cooldowns/functions, update unlocked status)
+            for (let key in data.skills) {
+                if (this.skills[key]) {
+                    this.skills[key].unlocked = data.skills[key].unlocked;
+                }
+            }
+            // Merge Keystones
+            this.keystones = data.keystones;
+            console.log("Save Loaded: Level " + this.level);
+            return true;
+        }
+        return false;
     }
 }
 
 export class Enemy {
     constructor(type, arenaSize) {
-        // Ratios: Goblins are melee, Archers are ranged
-        this.type = type; // 'goblin', 'archer', 'elite'
-        
-        // Spawning logic: strictly inside arena edges
+        this.type = type; 
         const side = Math.floor(Math.random() * 4);
         const margin = 30;
         if (side === 0) { this.x = -arenaSize + margin; this.y = (Math.random() * 2 - 1) * arenaSize; }
