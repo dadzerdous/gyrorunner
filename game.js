@@ -26,14 +26,30 @@ document.getElementById('char-select').style.display = 'flex';
 
 // --- MENU FUNCTIONS (Exposed to HTML) ---
 window.selectElement = (emoji, type) => {
-    player.loadProfile(); 
-    player.avatar = emoji; 
-    player.element = 'fire'; 
-    if (type === 'blood') { player.weapons[0].color = 'red'; player.weapons[0].damage = 5; }
-    connectNet();
+    // 1. Try to load existing save
+    const loaded = player.loadProfile();
+    
+    // 2. If no save, set defaults based on selection
+    if (!loaded) {
+        player.avatar = emoji; 
+        player.element = 'fire'; 
+        if (type === 'blood') { player.weapons[0].color = '#ff0000'; player.weapons[0].damage = 5; } 
+        else if (type === 'plague') { player.weapons[0].color = '#00ff00'; player.weapons[0].fireRate = 800; } 
+        else { player.weapons[0].color = 'orange'; }
+    } else {
+        // Just update the avatar visual if loaded
+        player.avatar = emoji; 
+    }
+    
+    // 3. Connect to server
+    // (Ensure you have connectNet imported!)
+    connectNet(); 
+
     document.getElementById('char-select').style.display = 'none';
-    hazards = MapSystem.generateHazards(arenaSize);
-    gameState = 'WAVE';
+    hazards = MapSystem.generateHazards(arenaSize); 
+    
+    if (loaded) showAnnouncement("WELCOME BACK", "Stats loaded. Wave progress reset.");
+    else showAnnouncement("ASCENSION BEGINS", "Reach Floor 10 to survive.");
 };
 
 window.buyItem = (type) => {
