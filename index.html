@@ -68,6 +68,33 @@
             </div>
             <button class="hud-btn" style="margin-top: 30px;" onclick="closeMenus()">LEAVE TRAINER</button>
         </div>
+        <div id="stat-menu" class="menu">
+            <h1 style="color: #ff00ff;">STAT MIRROR</h1>
+            <p>Stat Points: <span id="stat-points-display">0</span></p>
+            <div class="shop-grid">
+                <div class="shop-item">
+                    <h3>💪 STR</h3><p>+Dmg</p>
+                    <button class="buy-btn" onclick="upgradeStat('str')">+</button>
+                </div>
+                <div class="shop-item">
+                    <h3>⚡ DEX</h3><p>+Rate</p>
+                    <button class="buy-btn" onclick="upgradeStat('dex')">+</button>
+                </div>
+                <div class="shop-item">
+                    <h3>❤️ CON</h3><p>+HP</p>
+                    <button class="buy-btn" onclick="upgradeStat('con')">+</button>
+                </div>
+                <div class="shop-item">
+                    <h3>🔥 INT</h3><p>+Burn</p>
+                    <button class="buy-btn" onclick="upgradeStat('int')">+</button>
+                </div>
+                <div class="shop-item">
+                    <h3>🧠 WIS</h3><p>-CD</p>
+                    <button class="buy-btn" onclick="upgradeStat('wis')">+</button>
+                </div>
+            </div>
+            <button class="hud-btn" style="margin-top: 30px;" onclick="closeMenus()">LEAVE MIRROR</button>
+        </div>
     </div>
 
     <canvas id="gameCanvas"></canvas>
