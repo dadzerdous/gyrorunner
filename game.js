@@ -20,6 +20,8 @@ let shockwaves = [];
 let hazards = [];
 let tickerMsg = { text: "", x: canvas.width }; 
 let currentMessage = { title: "", body: "" };
+let wantsToExitHub = false;
+
 
 // Show Char Select
 document.getElementById('char-select').style.display = 'flex';
@@ -139,6 +141,10 @@ function update(time) {
         player.saveProfile();
     }
     player.lastServerPhase = serverPhase;
+    if (serverPhase === 'HUB') {
+    wantsToExitHub = false;
+}
+
 
     // Reduce cooldowns (Apply WIS here)
     const cdReduction = player.cooldownReduction;
@@ -186,12 +192,17 @@ function update(time) {
             if (input.keys['KeyE']) { gameState = 'MENU'; updateMenuUI(); document.getElementById('stat-menu').style.display = 'flex'; }
         }
 
-        // Exit Zone (Top)
-        if (player.y < -arenaSize + 150) {
-            sendReady(true); window.triggerTicker("WAITING FOR TEAM...");
-        } else {
-            sendReady(false);
-        }
+if (player.y < -arenaSize + 150) {
+    window.triggerTicker("PRESS [E] TO ENTER NEXT WAVE");
+    if (input.keys['KeyE']) {
+        wantsToExitHub = true;
+        sendReady(true);
+    }
+} else {
+    sendReady(false);
+}
+
+
         player.x = nextX; player.y = nextY;
     } 
     else { // WAVE
