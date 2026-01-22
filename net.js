@@ -1,13 +1,15 @@
-const WS_URL = "wss://gyrorunner-server.onrender.com"; // Keep your URL
+// net.js
+const WS_URL = "wss://gyrorunner-server.onrender.com";
 
 let ws = null;
 export let remotePlayers = {};
 export let remoteEnemies = [];
-export let portal = null; // New export
-export let serverPhase = 'WAVE'; // New export
+export let portal = null; 
+export let serverPhase = 'WAVE'; 
 export let myId = null;
 
 export function connectNet() {
+  if (ws) ws.close(); // Close existing if present
   ws = new WebSocket(WS_URL);
 
   ws.onmessage = (e) => {
@@ -22,6 +24,17 @@ export function connectNet() {
   };
 }
 
+// NEW: Disconnect function for Quit button
+export function disconnectNet() {
+    if (ws) {
+        ws.close();
+        ws = null;
+    }
+    remotePlayers = {};
+    remoteEnemies = [];
+    portal = null;
+}
+
 export function sendMove(x, y) {
   if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "move", x, y }));
 }
@@ -30,7 +43,6 @@ export function sendHit(enemyId, damage) {
   if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "hit", enemyId, damage }));
 }
 
-// Tell server we are standing on the objective
 export function sendReady(status) {
     if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "playerReady", status }));
 }
