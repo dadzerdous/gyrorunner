@@ -1,20 +1,20 @@
-import { connectNet, sendMove, sendHit, sendReady, remoteEnemies, remotePlayers, portal, serverPhase, myId } from "./net.js";
+import { connectNet, disconnectNet, sendMove, sendHit, sendReady, remoteEnemies, remotePlayers, portal, serverPhase, myId } from "./net.js"; // Added disconnectNet
 import { Player } from './entities.js';
 import { InputHandler } from './input.js';
-import { CombatSystem, AbilitySystem } from './systems.js'; // Use new System
+import { CombatSystem, AbilitySystem } from './systems.js';
 import { MapSystem } from './map.js';
-import { drawHUD, drawTicker, drawOverlayMessage, drawHubZones, drawSkillBar, drawPortal, skillButtons } from './ui.js';
+import { drawHUD, drawTicker, drawOverlayMessage, drawHubZones, drawSkillBar, drawPortal, drawQuitButton, skillButtons, quitButton } from './ui.js';
 
-connectNet();
+// Removed auto connectNet() at top - we connect when game starts
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth; canvas.height = window.innerHeight;
 
 const input = new InputHandler();
-const player = new Player();
+const player = new Player(); // Loads default
 const combat = new CombatSystem();
-const abilitySys = new AbilitySystem(player); // Instantiate new system
+const abilitySys = new AbilitySystem(player);
 
 let gameState = 'START'; 
 let arenaSize = 450;
@@ -23,16 +23,33 @@ let hazards = [];
 let tickerMsg = { text: "", x: canvas.width }; 
 let currentMessage = { title: "", body: "" };
 
+// Show the menu on load
+document.getElementById('char-select').style.display = 'flex';
+
 window.selectElement = (emoji, type) => {
-    player.avatar = emoji; 
-    player.element = 'fire'; 
-    if (type === 'blood') { player.weapons[0].color = '#ff0000'; player.weapons[0].damage = 5; } 
-    else if (type === 'plague') { player.weapons[0].color = '#00ff00'; player.weapons[0].fireRate = 800; } 
-    else { player.weapons[0].color = 'orange'; }
+    // 1. Load Save if exists (Before setting defaults)
+    const loaded = player.loadProfile();
     
+    // 2. Apply Selection Overrides (Only if not loaded, or update visual avatar)
+    if (!loaded) {
+        player.avatar = emoji; 
+        player.element = 'fire'; 
+        if (type === 'blood') { player.weapons[0].color = '#ff0000'; player.weapons[0].damage = 5; } 
+        else if (type === 'plague') { player.weapons[0].color = '#00ff00'; player.weapons[0].fireRate = 800; } 
+        else { player.weapons[0].color = 'orange'; }
+    } else {
+        // If loaded, just update the avatar to match what they clicked (optional) or keep save
+        player.avatar = emoji; // Let them look like what they clicked even if stats are loaded
+        window.triggerTicker("WELCOME BACK " + emoji);
+    }
+    
+    // 3. Connect and Start
+    connectNet();
     document.getElementById('char-select').style.display = 'none';
     hazards = MapSystem.generateHazards(arenaSize); 
-    showAnnouncement("ASCENSION BEGINS", "Reach Floor 10 to survive.");
+    
+    if (!loaded) showAnnouncement("ASCENSION BEGINS", "Reach Floor 10 to survive.");
+    else showAnnouncement("RESUMING RUN", "Floor progress reset. Stats saved.");
 };
 
 function showAnnouncement(title, body) {
@@ -41,25 +58,37 @@ function showAnnouncement(title, body) {
 }
 
 function handleGlobalClick(e) {
-    // 1. If Message is open, dismiss it
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const mouseY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+
+    // 1. Message Dismiss
     if (gameState === 'MESSAGE') {
         gameState = 'WAVE';
         window.triggerTicker("SURVIVE THE WAVES");
         return;
     }
 
-    // 2. Check Skill Button Clicks (WoW Style)
-    if (gameState === 'WAVE' || serverPhase === 'WAVE') {
-        const rect = canvas.getBoundingClientRect();
-        const mouseX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-        const mouseY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+    // 2. Quit Button (Top Right) - Only during active gameplay
+    if ((gameState === 'WAVE' || serverPhase === 'WAVE' || serverPhase === 'HUB') && quitButton) {
+         if (mouseX >= quitButton.x && mouseX <= quitButton.x + quitButton.w &&
+             mouseY >= quitButton.y && mouseY <= quitButton.y + quitButton.h) {
+             
+             // SAVE & QUIT Logic
+             player.saveProfile();
+             disconnectNet();
+             gameState = 'START';
+             document.getElementById('char-select').style.display = 'flex';
+             return;
+         }
+    }
 
+    // 3. Skill Buttons
+    if (gameState === 'WAVE' || serverPhase === 'WAVE') {
         skillButtons.forEach((btn, index) => {
             if (btn.rect && 
                 mouseX >= btn.rect.x && mouseX <= btn.rect.x + btn.rect.w &&
                 mouseY >= btn.rect.y && mouseY <= btn.rect.y + btn.rect.h) {
-                
-                // Trigger specific slot
                 abilitySys.tryTriggerSkill(index, remoteEnemies, shockwaves, sendHit);
             }
         });
@@ -71,10 +100,12 @@ window.triggerTicker = (text) => { tickerMsg.text = text; tickerMsg.x = canvas.w
 function update(time) {
     if (gameState === 'MESSAGE' || gameState === 'START') return;
     if (tickerMsg.text) { tickerMsg.x -= 3; if (tickerMsg.x < -1000) tickerMsg.text = ""; }
-    if (player.xp >= player.xpToNext) levelUp();
+    if (player.xp >= player.xpToNext) {
+        levelUp();
+        player.saveProfile(); // Auto-save on level up
+    }
     Object.values(player.skills).forEach(s => { if (s.cooldown > 0) s.cooldown--; });
     
-    // Movement Logic
     const move = input.getMovement();
     if (move.x !== 0 || move.y !== 0) player.currentDir = move;
     
@@ -98,7 +129,6 @@ function update(time) {
         });
         if (!hitBarrier) { player.x = nextX; player.y = nextY; }
         
-        // Portal Logic uses new drawPortal visual, but logic stays same
         if (portal) {
             if (Math.hypot(player.x - portal.x, player.y - portal.y) < 50) {
                  sendReady(true); window.triggerTicker("WAITING AT PORTAL...");
@@ -130,6 +160,12 @@ function levelUp() {
 
 function draw() {
     ctx.fillStyle = '#050208'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    if (gameState === 'START') {
+        // Stop drawing game when in menu
+        return; 
+    }
+
     ctx.save();
     ctx.translate(canvas.width / 2 - player.x, canvas.height / 2 - player.y);
 
@@ -139,7 +175,6 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(-arenaSize, i); ctx.lineTo(arenaSize, i); ctx.stroke();
     }
 
-    // Shockwaves
     shockwaves.forEach(sw => {
         sw.r += 5; sw.alpha -= 0.05;
         ctx.beginPath(); ctx.arc(sw.x, sw.y, sw.r, 0, Math.PI * 2);
@@ -160,10 +195,7 @@ function draw() {
                 ctx.fillText('🔥', h.x + 25, h.y + 35);
             }
         });
-        
-        // NEW PORTAL DRAW
         if (portal) drawPortal(ctx, portal);
-
         remoteEnemies.forEach(en => {
             ctx.font = '28px serif'; ctx.textAlign = 'center';
             ctx.fillText(en.type === 'archer' ? '🏹' : '🧟', en.x, en.y + 10);
@@ -183,8 +215,7 @@ function draw() {
     Object.entries(remotePlayers).forEach(([id, p]) => {
         if (!myId || id === myId) return; 
         ctx.font = "28px serif"; ctx.fillText("🧙", p.x, p.y + 10);
-        ctx.font = "12px monospace"; ctx.fillStyle = "white"; ctx.fillText(id.substring(0, 4), p.x, p.y
-                                                                           - 15);
+        ctx.font = "12px monospace"; ctx.fillStyle = "white"; ctx.fillText(id.substring(0, 4), p.x, p.y - 15);
     });
 
     let scale = player.isJumping ? 1.6 : 1;
@@ -192,10 +223,10 @@ function draw() {
     ctx.fillText(player.avatar || '🧛', player.x, player.y + 12);
     ctx.restore();
 
+    // UI DRAWING - HUD IS ALWAYS HERE
     drawHUD(ctx, canvas, player);
-    
-    // NEW SKILL BAR
     if (gameState === 'WAVE' || serverPhase === 'WAVE') drawSkillBar(ctx, canvas, player);
+    drawQuitButton(ctx, canvas); // Always draw quit button when playing
     
     drawTicker(ctx, canvas, tickerMsg);
     if (gameState === 'MESSAGE') drawOverlayMessage(ctx, canvas, currentMessage);
@@ -204,6 +235,5 @@ function draw() {
 function ticker(time) { update(time); draw(); requestAnimationFrame(ticker); }
 requestAnimationFrame(ticker);
 
-// Input Listeners
 window.addEventListener('mousedown', handleGlobalClick);
 window.addEventListener('touchstart', handleGlobalClick);
