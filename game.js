@@ -26,25 +26,36 @@ document.getElementById('char-select').style.display = 'flex';
 
 // --- MENU FUNCTIONS ---
 window.selectElement = (emoji, type) => {
+    // 1. Load or Create Profile
     const loaded = player.loadProfile();
     
     if (!loaded) {
         player.avatar = emoji; 
         player.element = 'fire'; 
+        // Set weapon types
         if (type === 'blood') { player.weapons[0].color = '#ff0000'; player.weapons[0].damage = 5; } 
         else if (type === 'plague') { player.weapons[0].color = '#00ff00'; player.weapons[0].fireRate = 800; } 
         else { player.weapons[0].color = 'orange'; }
     } else {
         player.avatar = emoji; 
     }
-    
+
+    // --- FIX: FORCE UNLOCK ALL ABILITIES ---
+    // This makes sure keys 1, 2, 3, 4 work immediately for testing
+    player.skills.fireBurst.unlocked = true;
+    player.skills.flameDash.unlocked = true;
+    player.skills.moltenGuard.unlocked = true;
+    player.skills.inferno.unlocked = true;
+
+    // 2. Connect to server
     connectNet(); 
 
+    // 3. Hide Menu & Generate Map
     document.getElementById('char-select').style.display = 'none';
     hazards = MapSystem.generateHazards(arenaSize); 
     
     if (loaded) showAnnouncement("WELCOME BACK", "Stats loaded. Wave progress reset.");
-    else showAnnouncement("ASCENSION BEGINS", "Reach Floor 10 to survive.");
+    else showAnnouncement("ASCENSION BEGINS", "Kill enemies to spawn the Portal.");
 };
 
 window.buyItem = (type) => {
@@ -96,6 +107,7 @@ function update(time) {
         window.triggerTicker("LEVEL UP! +1 SP");
         player.saveProfile();
     }
+    // Reduce cooldowns
     Object.values(player.skills).forEach(s => { if (s.cooldown > 0) s.cooldown--; });
 
     // Movement
@@ -105,36 +117,36 @@ function update(time) {
     let nextY = player.y + move.y * player.speed;
     const pRadius = 20;
 
-    // --- FIX: ABILITIES (Added Numpad Support) ---
+    // --- ABILITY INPUTS (Fixed) ---
+    // Checks 1-4 on both top row and numpad
     if (input.keys['Digit1'] || input.keys['Numpad1']) abilitySys.tryTriggerSkill(0, remoteEnemies, shockwaves, sendHit);
     if (input.keys['Digit2'] || input.keys['Numpad2']) abilitySys.tryTriggerSkill(1, remoteEnemies, shockwaves, sendHit);
     if (input.keys['Digit3'] || input.keys['Numpad3']) abilitySys.tryTriggerSkill(2, remoteEnemies, shockwaves, sendHit);
     if (input.keys['Digit4'] || input.keys['Numpad4']) abilitySys.tryTriggerSkill(3, remoteEnemies, shockwaves, sendHit);
 
-    // --- FIX: SHOCKWAVE VISIBILITY (Slower fade) ---
+    // Shockwave Animation
     for (let i = shockwaves.length - 1; i >= 0; i--) {
         let s = shockwaves[i];
         s.r += 2;
-        s.alpha -= 0.02; // Slower fade so you can see it
+        s.alpha -= 0.02;
         if (s.alpha <= 0) shockwaves.splice(i, 1);
     }
 
-    // --- PHASE LOGIC & HUB ---
+    // --- PHASE & HUB LOGIC ---
     if (serverPhase === 'HUB') {
-        // Visual indicator that we are in HUB
-        if (Math.random() < 0.01) window.triggerTicker("WELCOME TO SAFE ZONE");
-
-        // 1. Shop Zone (-200, 0)
+        // We are in the Hub!
+        
+        // Shop Zone Interaction
         if (Math.hypot(player.x - (-200), player.y) < 80) {
             window.triggerTicker("PRESS [E] OR CLICK TO SHOP");
             if (input.keys['KeyE']) openShop();
         }
-        // 2. Skill Zone (200, 0)
+        // Skill Zone Interaction
         if (Math.hypot(player.x - 200, player.y) < 80) {
             window.triggerTicker("PRESS [E] OR CLICK FOR SKILLS");
             if (input.keys['KeyE']) openSkills();
         }
-        // 3. Exit Zone (Top Edge)
+        // Exit Zone (Top of map) - Sends you to next Wave
         if (player.y < -arenaSize + 150) {
             sendReady(true); 
             window.triggerTicker("WAITING FOR TEAM TO EXIT...");
@@ -144,11 +156,22 @@ function update(time) {
         player.x = nextX; player.y = nextY;
     } 
     else { // WAVE MODE
-        // Detect if Portal is Open and tell user!
+        // 1. Check for Portal
         if (portal) {
-             window.triggerTicker(">>> PORTAL OPEN! GO NORTH <<<");
+             // If portal exists, tell the player!
+             if (Math.random() < 0.02) window.triggerTicker("PORTAL OPEN! GO NORTH!");
+             
+             // --- FIX: PORTAL INTERACTION ---
+             // I increased the range to 100 so it's easier to hit
+             if (Math.hypot(player.x - portal.x, player.y - portal.y) < 100) {
+                 sendReady(true);
+                 window.triggerTicker("TELEPORTING...");
+             } else {
+                 sendReady(false);
+             }
         }
 
+        // 2. Hazards & Traps
         let hitBarrier = false;
         hazards.forEach(h => {
             if (nextX + pRadius > h.x && nextX - pRadius < h.x + 50 &&
@@ -158,15 +181,13 @@ function update(time) {
             }
         });
         if (!hitBarrier) { player.x = nextX; player.y = nextY; }
-
-        // Portal Interaction
-        if (portal && Math.hypot(player.x - portal.x, player.y - portal.y) < 60) sendReady(true);
-        else sendReady(false);
     }
 
-    // Clamp & Sync
+    // Keep player inside arena
     player.x = Math.max(-arenaSize + pRadius, Math.min(arenaSize - pRadius, player.x));
     player.y = Math.max(-arenaSize + pRadius, Math.min(arenaSize - pRadius, player.y));
+    
+    // Send position to server
     sendMove(player.x, player.y);
 
     if (serverPhase === 'WAVE') {
@@ -174,7 +195,6 @@ function update(time) {
         combat.updateProjectiles(remoteEnemies, arenaSize, sendHit, player);
     }
 }
-
 function openShop() {
     gameState = 'MENU';
     updateMenuUI();
