@@ -24,12 +24,10 @@ let currentMessage = { title: "", body: "" };
 // Show Char Select
 document.getElementById('char-select').style.display = 'flex';
 
-// --- MENU FUNCTIONS (Exposed to HTML) ---
+// --- MENU FUNCTIONS ---
 window.selectElement = (emoji, type) => {
-    // 1. Try to load existing save
     const loaded = player.loadProfile();
     
-    // 2. If no save, set defaults based on selection
     if (!loaded) {
         player.avatar = emoji; 
         player.element = 'fire'; 
@@ -37,11 +35,9 @@ window.selectElement = (emoji, type) => {
         else if (type === 'plague') { player.weapons[0].color = '#00ff00'; player.weapons[0].fireRate = 800; } 
         else { player.weapons[0].color = 'orange'; }
     } else {
-        // Just update the avatar visual if loaded
         player.avatar = emoji; 
     }
     
-    // 3. Connect to server
     connectNet(); 
 
     document.getElementById('char-select').style.display = 'none';
@@ -67,7 +63,7 @@ window.upgradeSkill = (key) => {
     if (player.skillPoints >= 1) {
         player.skillPoints--;
         player.skills[key].unlocked = true;
-        player.skills[key].maxCD = Math.max(50, player.skills[key].maxCD - 20); // Reduce CD
+        player.skills[key].maxCD = Math.max(50, player.skills[key].maxCD - 20); 
         window.triggerTicker(`UPGRADED ${key.toUpperCase()}`);
     }
     updateMenuUI();
@@ -76,7 +72,7 @@ window.upgradeSkill = (key) => {
 window.closeMenus = () => {
     document.getElementById('shop-menu').style.display = 'none';
     document.getElementById('skill-menu').style.display = 'none';
-    gameState = 'WAVE'; // Resume moving
+    gameState = 'WAVE'; 
 };
 window.showAnnouncement = (title, body) => {
     currentMessage.title = title;
@@ -109,42 +105,50 @@ function update(time) {
     let nextY = player.y + move.y * player.speed;
     const pRadius = 20;
 
-    // --- NEW: ABILITY INPUTS ---
-    if (input.keys['Digit1']) abilitySys.tryTriggerSkill(0, remoteEnemies, shockwaves, sendHit);
-    if (input.keys['Digit2']) abilitySys.tryTriggerSkill(1, remoteEnemies, shockwaves, sendHit);
-    if (input.keys['Digit3']) abilitySys.tryTriggerSkill(2, remoteEnemies, shockwaves, sendHit);
-    if (input.keys['Digit4']) abilitySys.tryTriggerSkill(3, remoteEnemies, shockwaves, sendHit);
+    // --- FIX: ABILITIES (Added Numpad Support) ---
+    if (input.keys['Digit1'] || input.keys['Numpad1']) abilitySys.tryTriggerSkill(0, remoteEnemies, shockwaves, sendHit);
+    if (input.keys['Digit2'] || input.keys['Numpad2']) abilitySys.tryTriggerSkill(1, remoteEnemies, shockwaves, sendHit);
+    if (input.keys['Digit3'] || input.keys['Numpad3']) abilitySys.tryTriggerSkill(2, remoteEnemies, shockwaves, sendHit);
+    if (input.keys['Digit4'] || input.keys['Numpad4']) abilitySys.tryTriggerSkill(3, remoteEnemies, shockwaves, sendHit);
 
-    // --- NEW: SHOCKWAVE UPDATES ---
+    // --- FIX: SHOCKWAVE VISIBILITY (Slower fade) ---
     for (let i = shockwaves.length - 1; i >= 0; i--) {
         let s = shockwaves[i];
         s.r += 2;
-        s.alpha -= 0.05;
+        s.alpha -= 0.02; // Slower fade so you can see it
         if (s.alpha <= 0) shockwaves.splice(i, 1);
     }
 
-    // --- PHASE LOGIC ---
+    // --- PHASE LOGIC & HUB ---
     if (serverPhase === 'HUB') {
+        // Visual indicator that we are in HUB
+        if (Math.random() < 0.01) window.triggerTicker("WELCOME TO SAFE ZONE");
+
         // 1. Shop Zone (-200, 0)
-        if (Math.hypot(player.x - (-200), player.y) < 60) {
+        if (Math.hypot(player.x - (-200), player.y) < 80) {
             window.triggerTicker("PRESS [E] OR CLICK TO SHOP");
             if (input.keys['KeyE']) openShop();
         }
         // 2. Skill Zone (200, 0)
-        if (Math.hypot(player.x - 200, player.y) < 60) {
+        if (Math.hypot(player.x - 200, player.y) < 80) {
             window.triggerTicker("PRESS [E] OR CLICK FOR SKILLS");
             if (input.keys['KeyE']) openSkills();
         }
         // 3. Exit Zone (Top Edge)
-        if (player.y < -arenaSize + 100) {
-            sendReady(true); window.triggerTicker("WAITING FOR TEAM TO EXIT...");
+        if (player.y < -arenaSize + 150) {
+            sendReady(true); 
+            window.triggerTicker("WAITING FOR TEAM TO EXIT...");
         } else {
             sendReady(false);
         }
-
         player.x = nextX; player.y = nextY;
     } 
-    else { // WAVE
+    else { // WAVE MODE
+        // Detect if Portal is Open and tell user!
+        if (portal) {
+             window.triggerTicker(">>> PORTAL OPEN! GO NORTH <<<");
+        }
+
         let hitBarrier = false;
         hazards.forEach(h => {
             if (nextX + pRadius > h.x && nextX - pRadius < h.x + 50 &&
@@ -155,7 +159,8 @@ function update(time) {
         });
         if (!hitBarrier) { player.x = nextX; player.y = nextY; }
 
-        if (portal && Math.hypot(player.x - portal.x, player.y - portal.y) < 50) sendReady(true);
+        // Portal Interaction
+        if (portal && Math.hypot(player.x - portal.x, player.y - portal.y) < 60) sendReady(true);
         else sendReady(false);
     }
 
@@ -183,30 +188,45 @@ function openSkills() {
 }
 
 function draw() {
-    ctx.fillStyle = '#111'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // 1. Background (Blue-ish)
+    ctx.fillStyle = '#1a1a2e'; 
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
     if (gameState === 'START') return;
 
     ctx.save();
     ctx.translate(canvas.width / 2 - player.x, canvas.height / 2 - player.y);
 
-    // Floor Grid
-    ctx.strokeStyle = serverPhase === 'HUB' ? '#444' : '#2a1b4d';
-    for (let i = -arenaSize; i <= arenaSize; i += 50) {
-        ctx.beginPath(); ctx.moveTo(i, -arenaSize); ctx.lineTo(i, arenaSize); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(-arenaSize, i); ctx.lineTo(arenaSize, i); ctx.stroke();
+    // 2. Floor Grid
+    if (serverPhase === 'HUB') {
+        // HUB FLOOR: Checkerboard pattern
+        ctx.strokeStyle = '#333';
+        ctx.fillStyle = '#222';
+        for (let i = -arenaSize; i < arenaSize; i += 100) {
+            for (let j = -arenaSize; j < arenaSize; j += 100) {
+                if ((i + j) % 200 === 0) ctx.fillRect(i, j, 100, 100);
+            }
+        }
+    } else {
+        // WAVE FLOOR: Standard Grid
+        ctx.strokeStyle = '#2a1b4d';
+        for (let i = -arenaSize; i <= arenaSize; i += 50) {
+            ctx.beginPath(); ctx.moveTo(i, -arenaSize); ctx.lineTo(i, arenaSize); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(-arenaSize, i); ctx.lineTo(arenaSize, i); ctx.stroke();
+        }
     }
 
-    // --- NEW: BORDER ---
-    ctx.lineWidth = 5;
-    ctx.strokeStyle = '#ff0044';
+    // 3. Border (Yellow)
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = serverPhase === 'HUB' ? '#00ffcc' : '#ffff00';
     ctx.strokeRect(-arenaSize, -arenaSize, arenaSize * 2, arenaSize * 2);
     ctx.lineWidth = 1;
 
-    // --- NEW: SHOCKWAVES ---
+    // 4. Abilities (Shockwaves)
     shockwaves.forEach(s => {
         ctx.save();
         ctx.strokeStyle = s.color || 'white';
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 5;
         ctx.globalAlpha = s.alpha;
         ctx.beginPath();
         ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
@@ -215,28 +235,29 @@ function draw() {
     });
 
     if (serverPhase === 'HUB') {
-        // Draw Hub Zones
-        ctx.fillStyle = 'rgba(255, 215, 0, 0.3)'; ctx.fillRect(-230, -30, 60, 60); // Shop
-        ctx.fillStyle = 'white'; ctx.fillText("🛒 SHOP", -220, -40);
+        // Draw Hub Zones (Shop/Skill/Exit)
+        ctx.fillStyle = 'rgba(255, 215, 0, 0.4)'; ctx.fillRect(-240, -40, 80, 80); // Shop
+        ctx.fillStyle = 'white'; ctx.font = "bold 20px monospace"; ctx.fillText("🛒 SHOP", -230, -50);
 
-        ctx.fillStyle = 'rgba(0, 255, 200, 0.3)'; ctx.fillRect(170, -30, 60, 60); // Skills
-        ctx.fillText("💪 SKILLS", 180, -40);
+        ctx.fillStyle = 'rgba(0, 255, 200, 0.4)'; ctx.fillRect(160, -40, 80, 80); // Skills
+        ctx.fillText("💪 SKILLS", 170, -50);
 
-        ctx.fillStyle = 'rgba(0, 100, 255, 0.3)'; ctx.fillRect(-100, -arenaSize, 200, 80); // Exit
-        ctx.fillText("EXIT ⬆️", -20, -arenaSize + 100);
+        ctx.fillStyle = 'rgba(0, 100, 255, 0.3)'; ctx.fillRect(-150, -arenaSize, 300, 100); // Exit
+        ctx.fillText("EXIT TO NEXT WAVE ⬆️", -100, -arenaSize + 120);
     } else {
-        // Wave Stuff (Hazards, Enemies, Portal)
+        // Wave Stuff
         hazards.forEach(h => {
              ctx.fillStyle = h.type === 'BARRIER' ? '#555' : 'rgba(255,0,0,0.3)';
              ctx.fillRect(h.x, h.y, 50, 50);
         });
         if (portal) drawPortal(ctx, portal); 
+        
         remoteEnemies.forEach(en => {
             ctx.fillText(en.type === 'archer' ? '🏹' : '🧟', en.x, en.y);
             ctx.fillStyle = 'red'; ctx.fillRect(en.x-15, en.y-20, 30*(en.hp/3), 4);
         });
         
-        // --- NEW: PROJECTILES ---
+        // Projectiles
         combat.projectiles.forEach(p => {
             ctx.fillStyle = p.color || 'yellow';
             ctx.beginPath();
@@ -263,19 +284,17 @@ function draw() {
     drawTicker(ctx, canvas, tickerMsg);
 }
 
-// Global Click for Interacting
+// Global Click
 window.addEventListener('mousedown', (e) => {
-    // Check Shop/Skill Click interaction if in Hub
     if (serverPhase === 'HUB') {
-        if (Math.hypot(player.x - (-200), player.y) < 60) openShop();
-        if (Math.hypot(player.x - 200, player.y) < 60) openSkills();
+        if (Math.hypot(player.x - (-200), player.y) < 80) openShop();
+        if (Math.hypot(player.x - 200, player.y) < 80) openSkills();
     }
     if (gameState === 'MESSAGE') {
         gameState = 'WAVE';
         return;
     }
 
-    // Quit Button
     const rect = canvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
