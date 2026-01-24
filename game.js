@@ -346,73 +346,7 @@ function draw() {
         ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
     });
 
-if (serverPhase === 'HUB') {
 
-    // Ensure correct control mode
-    if (player.controlMode !== 'UI') {
-        player.controlMode = 'HUB';
-    }
-
-    // Only allow movement if NOT in UI
-    const moveAllowed = player.controlMode === 'HUB';
-    if (moveAllowed) {
-        player.x = nextX;
-        player.y = nextY;
-    }
-
-    // ---- WALK-ON PADS ----
-    if (player.controlMode === 'HUB') {
-
-        // SHOP PAD (LEFT)
-        if (Math.hypot(player.x + 200, player.y) < 60) {
-            enterPad('SHOP');
-        }
-
-        // SKILLS PAD (RIGHT)
-        else if (Math.hypot(player.x - 200, player.y) < 60) {
-            enterPad('SKILLS');
-        }
-
-        // STATS PAD (BOTTOM)
-        else if (Math.hypot(player.x, player.y - 200) < 60) {
-            enterPad('STATS');
-        }
-
-        // EXIT PORTAL (TOP EDGE)
-        else if (player.y < -arenaSize + 120) {
-            sendReady(true);
-        } else {
-            sendReady(false);
-        }
-    }
-
- else {
-        // Wave Stuff
-        hazards.forEach(h => {
-             ctx.fillStyle = h.type === 'BARRIER' ? '#555' : 'rgba(255,0,0,0.3)';
-             ctx.fillRect(h.x, h.y, 50, 50);
-        });
-        if (portal) drawPortal(ctx, portal); 
-        remoteEnemies.forEach(en => {
-            ctx.fillText(en.type === 'archer' ? '🏹' : '🧟', en.x, en.y);
-            ctx.fillStyle = 'red'; ctx.fillRect(en.x-15, en.y-20, 30*(en.hp/3), 4);
-        });
-        combat.projectiles.forEach(p => {
-            ctx.fillStyle = p.color || 'yellow'; ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI * 2); ctx.fill();
-        });
-    }
-    
-    Object.entries(remotePlayers).forEach(([id, p]) => { if (id !== myId) ctx.fillText("🧙", p.x, p.y); });
-    ctx.fillText(player.avatar, player.x, player.y);
-    ctx.restore();
-
-    drawHUD(ctx, canvas, player);
-    if (gameState === 'WAVE' || serverPhase === 'WAVE') drawSkillBar(ctx, canvas, player);
-    if (gameState === 'MESSAGE') { drawOverlayMessage(ctx, canvas, currentMessage); return; }
-
-    drawQuitButton(ctx, canvas);
-    drawTicker(ctx, canvas, tickerMsg);
-}
 
 // Global Click
 window.addEventListener('mousedown', (e) => {
