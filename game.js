@@ -14,6 +14,11 @@ const player = new Player();
 const combat = new CombatSystem();
 const abilitySys = new AbilitySystem(player);
 
+// --- CONTROL STATE ---
+player.controlMode = 'WAVE'; // 'WAVE' | 'HUB' | 'UI'
+player.activePad = null;     // 'SHOP' | 'SKILLS' | 'STATS' | null
+
+
 let gameState = 'START'; 
 let arenaSize = 450;
 let shockwaves = [];
@@ -85,9 +90,12 @@ window.upgradeSkill = (key) => {
 window.closeMenus = () => {
     document.getElementById('shop-menu').style.display = 'none';
     document.getElementById('skill-menu').style.display = 'none';
-    document.getElementById('stat-menu').style.display = 'none'; // Add this line
-    gameState = 'WAVE'; 
+    document.getElementById('stat-menu').style.display = 'none';
+
+    player.controlMode = 'HUB';
+    player.activePad = null;
 };
+
 window.showAnnouncement = (title, body) => {
     currentMessage.title = title;
     currentMessage.body = body;
@@ -116,122 +124,183 @@ function updateMenuUI() {
 
 // --- MAIN LOOP ---
 function update(time) {
-    if (gameState === 'MESSAGE' || gameState === 'START' || gameState === 'MENU') return;
+    // --- HARD STOPS ---
+    if (gameState === 'MESSAGE' || gameState === 'START') return;
+
+    // If UI is open, freeze gameplay but still draw
+    if (player.controlMode === 'UI') {
+        return;
+    }
 
     // --- APPLY STATS TO WEAPONS ---
-    // This ensures STR and DEX actually work!
     player.weapons[0].damage = player.currentDamage;
     player.weapons[0].fireRate = player.currentFireRate;
 
-    // Ticker
-    if (tickerMsg.text) { tickerMsg.x -= 3; if (tickerMsg.x < -1000) tickerMsg.text = ""; }
+    // --- TICKER ---
+    if (tickerMsg.text) {
+        tickerMsg.x -= 3;
+        if (tickerMsg.x < -1000) tickerMsg.text = "";
+    }
 
-    // --- LEVEL UP (XP -> STAT POINTS) ---
+    // --- LEVEL UP (XP → STAT POINTS) ---
     if (player.xp >= player.xpToNext) {
-        player.level++; player.xp = 0; player.xpToNext *= 1.2; 
-        player.statPoints++; // Gain Stat Point
-        window.triggerTicker("LEVEL UP! +1 STAT POINT (STR/DEX/ETC)");
+        player.level++;
+        player.xp = 0;
+        player.xpToNext *= 1.2;
+        player.statPoints++;
+        window.triggerTicker("LEVEL UP! +1 STAT POINT");
         player.saveProfile();
     }
 
-    // --- WAVE CLEAR (PHASE -> ABILITY POINTS) ---
+    // --- WAVE CLEAR → ABILITY POINT ---
     if (player.lastServerPhase === 'WAVE' && serverPhase === 'HUB') {
-        player.abilityPoints++; // Gain Ability Point
+        player.abilityPoints++;
         window.triggerTicker("WAVE CLEARED! +1 ABILITY POINT");
         player.saveProfile();
     }
     player.lastServerPhase = serverPhase;
-    if (serverPhase === 'HUB') {
-    wantsToExitHub = false;
-}
 
-
-    // Reduce cooldowns (Apply WIS here)
-    const cdReduction = player.cooldownReduction;
-    Object.values(player.skills).forEach(s => { 
-        if (s.cooldown > 0) s.cooldown--; 
-        // Ensure maxCD is updated with WIS
-        // (This is a simplified way to apply it dynamically)
+    // --- COOLDOWNS ---
+    Object.values(player.skills).forEach(s => {
+        if (s.cooldown > 0) s.cooldown--;
     });
 
-    // Movement
+    // --- MOVEMENT INPUT ---
     const move = input.getMovement();
     if (move.x !== 0 || move.y !== 0) player.currentDir = move;
+
     let nextX = player.x + move.x * player.speed;
     let nextY = player.y + move.y * player.speed;
     const pRadius = 20;
 
-    // Ability Inputs
-    if (input.keys['Digit1'] || input.keys['Numpad1']) abilitySys.tryTriggerSkill(0, remoteEnemies, shockwaves, sendHit);
-    if (input.keys['Digit2'] || input.keys['Numpad2']) abilitySys.tryTriggerSkill(1, remoteEnemies, shockwaves, sendHit);
-    if (input.keys['Digit3'] || input.keys['Numpad3']) abilitySys.tryTriggerSkill(2, remoteEnemies, shockwaves, sendHit);
-    if (input.keys['Digit4'] || input.keys['Numpad4']) abilitySys.tryTriggerSkill(3, remoteEnemies, shockwaves, sendHit);
-
-    // Shockwaves
-    for (let i = shockwaves.length - 1; i >= 0; i--) {
-        let s = shockwaves[i];
-        s.r += 2; s.alpha -= 0.02;
-        if (s.alpha <= 0) shockwaves.splice(i, 1);
-    }
-
-    // --- HUB LOGIC ---
+    // --- HUB MODE ---
     if (serverPhase === 'HUB') {
-        // Shop Zone (Left)
-        if (Math.hypot(player.x - (-200), player.y) < 80) {
-            window.triggerTicker("PRESS [E] TO SHOP");
-            if (input.keys['KeyE']) { gameState = 'MENU'; updateMenuUI(); document.getElementById('shop-menu').style.display = 'flex'; }
-        }
-        // Skill Zone (Right)
-        if (Math.hypot(player.x - 200, player.y) < 80) {
-            window.triggerTicker("PRESS [E] FOR ABILITIES");
-            if (input.keys['KeyE']) { gameState = 'MENU'; updateMenuUI(); document.getElementById('skill-menu').style.display = 'flex'; }
-        }
-        // --- NEW: STAT MIRROR ZONE (Bottom) ---
-        if (Math.hypot(player.x, player.y - 200) < 80) {
-            window.triggerTicker("PRESS [E] FOR STATS");
-            if (input.keys['KeyE']) { gameState = 'MENU'; updateMenuUI(); document.getElementById('stat-menu').style.display = 'flex'; }
+
+        // Ensure correct mode
+        if (player.controlMode !== 'UI') {
+            player.controlMode = 'HUB';
         }
 
-if (player.y < -arenaSize + 150) {
-    window.triggerTicker("PRESS [E] TO ENTER NEXT WAVE");
-    if (input.keys['KeyE']) {
-        wantsToExitHub = true;
-        sendReady(true);
+        // Apply movement ONLY in HUB mode
+        if (player.controlMode === 'HUB') {
+            player.x = nextX;
+            player.y = nextY;
+        }
+
+        // -------- WALK-ON PADS --------
+
+        // SHOP PAD (LEFT)
+        if (player.controlMode === 'HUB' &&
+            Math.hypot(player.x + 200, player.y) < 60) {
+            enterPad('SHOP');
+        }
+
+        // SKILLS PAD (RIGHT)
+        else if (player.controlMode === 'HUB' &&
+            Math.hypot(player.x - 200, player.y) < 60) {
+            enterPad('SKILLS');
+        }
+
+        // STATS PAD (BOTTOM)
+        else if (player.controlMode === 'HUB' &&
+            Math.hypot(player.x, player.y - 200) < 60) {
+            enterPad('STATS');
+        }
+
+        // EXIT PORTAL (TOP)
+        else if (player.controlMode === 'HUB' &&
+            player.y < -arenaSize + 120) {
+            sendReady(true);
+        } else {
+            sendReady(false);
+        }
     }
-} else {
-    sendReady(false);
-}
 
+    // --- WAVE MODE ---
+    else {
+        player.controlMode = 'WAVE';
 
-        player.x = nextX; player.y = nextY;
-    } 
-    else { // WAVE
+        // Ability inputs ONLY during wave
+        if (input.keys['Digit1'] || input.keys['Numpad1'])
+            abilitySys.tryTriggerSkill(0, remoteEnemies, shockwaves, sendHit);
+        if (input.keys['Digit2'] || input.keys['Numpad2'])
+            abilitySys.tryTriggerSkill(1, remoteEnemies, shockwaves, sendHit);
+        if (input.keys['Digit3'] || input.keys['Numpad3'])
+            abilitySys.tryTriggerSkill(2, remoteEnemies, shockwaves, sendHit);
+        if (input.keys['Digit4'] || input.keys['Numpad4'])
+            abilitySys.tryTriggerSkill(3, remoteEnemies, shockwaves, sendHit);
+
+        // Portal logic
         if (portal) {
-             if (Math.random() < 0.02) window.triggerTicker("PORTAL OPEN! GO NORTH!");
-             if (Math.hypot(player.x - portal.x, player.y - portal.y) < 100) {
-                 sendReady(true); window.triggerTicker("TELEPORTING...");
-             } else { sendReady(false); }
+            if (Math.hypot(player.x - portal.x, player.y - portal.y) < 100) {
+                sendReady(true);
+            } else {
+                sendReady(false);
+            }
         }
+
+        // Collision
         let hitBarrier = false;
         hazards.forEach(h => {
-            if (nextX + pRadius > h.x && nextX - pRadius < h.x + 50 &&
-                nextY + pRadius > h.y && nextY - pRadius < h.y + 50) {
+            if (
+                nextX + pRadius > h.x && nextX - pRadius < h.x + 50 &&
+                nextY + pRadius > h.y && nextY - pRadius < h.y + 50
+            ) {
                 if (h.type === 'BARRIER') hitBarrier = true;
-                else if (h.type === 'TRAP' && !player.isJumping) player.hp -= 0.1;
+                else if (h.type === 'TRAP') player.hp -= 0.1;
             }
         });
-        if (!hitBarrier) { player.x = nextX; player.y = nextY; }
+
+        if (!hitBarrier) {
+            player.x = nextX;
+            player.y = nextY;
+        }
     }
 
+    // --- CLAMP ---
     player.x = Math.max(-arenaSize + pRadius, Math.min(arenaSize - pRadius, player.x));
     player.y = Math.max(-arenaSize + pRadius, Math.min(arenaSize - pRadius, player.y));
+
     sendMove(player.x, player.y);
 
+    // --- COMBAT ---
     if (serverPhase === 'WAVE') {
         combat.updateWeapons(player, remoteEnemies, time);
         combat.updateProjectiles(remoteEnemies, arenaSize, sendHit, player);
     }
+
+    // --- SHOCKWAVES ---
+    for (let i = shockwaves.length - 1; i >= 0; i--) {
+        shockwaves[i].r += 2;
+        shockwaves[i].alpha -= 0.02;
+        if (shockwaves[i].alpha <= 0) shockwaves.splice(i, 1);
+    }
 }
+
+
+function enterPad(type) {
+    if (player.controlMode !== 'HUB') return;
+
+    player.controlMode = 'UI';
+    player.activePad = type;
+
+    // Hard stop movement
+    input.moveDir = { x: 0, y: 0 };
+
+    updateMenuUI();
+
+    if (type === 'SHOP') {
+        document.getElementById('shop-menu').style.display = 'flex';
+    }
+    if (type === 'SKILLS') {
+        document.getElementById('skill-menu').style.display = 'flex';
+    }
+    if (type === 'STATS') {
+        document.getElementById('stat-menu').style.display = 'flex';
+    }
+}
+
+
 function openShop() {
     gameState = 'MENU';
     updateMenuUI();
@@ -277,24 +346,47 @@ function draw() {
         ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
     });
 
-    if (serverPhase === 'HUB') {
-        // Shop (Yellow)
-        ctx.fillStyle = 'rgba(255, 215, 0, 0.4)'; ctx.fillRect(-240, -40, 80, 80);
-        ctx.fillStyle = 'white'; ctx.font = "bold 20px monospace"; ctx.fillText("🛒 SHOP", -230, -50);
+if (serverPhase === 'HUB') {
 
-        // Skills (Teal)
-        ctx.fillStyle = 'rgba(0, 255, 200, 0.4)'; ctx.fillRect(160, -40, 80, 80);
-        ctx.fillText("💪 SKILLS", 170, -50);
-        
-        // --- NEW: STAT MIRROR (Purple) ---
-        // Located at (0, 200) - South
-        ctx.fillStyle = 'rgba(255, 0, 255, 0.4)'; ctx.fillRect(-40, 160, 80, 80);
-        ctx.fillText("🧠 STATS", -35, 150);
+    // Ensure correct control mode
+    if (player.controlMode !== 'UI') {
+        player.controlMode = 'HUB';
+    }
 
-        // Exit (Blue)
-        ctx.fillStyle = 'rgba(0, 100, 255, 0.3)'; ctx.fillRect(-150, -arenaSize, 300, 100);
-        ctx.fillText("EXIT TO NEXT WAVE ⬆️", -100, -arenaSize + 120);
-    } else {
+    // Only allow movement if NOT in UI
+    const moveAllowed = player.controlMode === 'HUB';
+    if (moveAllowed) {
+        player.x = nextX;
+        player.y = nextY;
+    }
+
+    // ---- WALK-ON PADS ----
+    if (player.controlMode === 'HUB') {
+
+        // SHOP PAD (LEFT)
+        if (Math.hypot(player.x + 200, player.y) < 60) {
+            enterPad('SHOP');
+        }
+
+        // SKILLS PAD (RIGHT)
+        else if (Math.hypot(player.x - 200, player.y) < 60) {
+            enterPad('SKILLS');
+        }
+
+        // STATS PAD (BOTTOM)
+        else if (Math.hypot(player.x, player.y - 200) < 60) {
+            enterPad('STATS');
+        }
+
+        // EXIT PORTAL (TOP EDGE)
+        else if (player.y < -arenaSize + 120) {
+            sendReady(true);
+        } else {
+            sendReady(false);
+        }
+    }
+
+ else {
         // Wave Stuff
         hazards.forEach(h => {
              ctx.fillStyle = h.type === 'BARRIER' ? '#555' : 'rgba(255,0,0,0.3)';
