@@ -345,7 +345,7 @@ function draw() {
         ctx.save(); ctx.strokeStyle = s.color || 'white'; ctx.lineWidth = 5; ctx.globalAlpha = s.alpha;
         ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
     });
-
+}
 
 
 // Global Click
