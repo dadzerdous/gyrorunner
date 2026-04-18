@@ -317,6 +317,7 @@ function draw() {
     ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     if (gameState === 'START') return;
 
+    // --- WORLD SPACE (camera-translated) ---
     ctx.save();
     ctx.translate(canvas.width / 2 - player.x, canvas.height / 2 - player.y);
 
@@ -340,11 +341,56 @@ function draw() {
     ctx.lineWidth = 8; ctx.strokeStyle = serverPhase === 'HUB' ? '#00ffcc' : '#ffff00';
     ctx.strokeRect(-arenaSize, -arenaSize, arenaSize * 2, arenaSize * 2); ctx.lineWidth = 1;
 
+    // Hazards
+    hazards.forEach(h => {
+        ctx.fillStyle = h.type === 'BARRIER' ? '#555' : '#ff000044';
+        ctx.fillRect(h.x, h.y, 50, 50);
+    });
+
     // Shockwaves
     shockwaves.forEach(s => {
         ctx.save(); ctx.strokeStyle = s.color || 'white'; ctx.lineWidth = 5; ctx.globalAlpha = s.alpha;
         ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
     });
+
+    // Remote players
+    Object.values(remotePlayers).forEach(p => {
+        if (p.id === myId) return;
+        ctx.font = "28px serif"; ctx.textAlign = "center";
+        ctx.fillText(p.avatar || '🧙', p.x, p.y);
+    });
+
+    // Enemies
+    remoteEnemies.forEach(en => {
+        ctx.fillStyle = en.type === 'goblin' ? '#22cc44' : '#cc2244';
+        ctx.beginPath(); ctx.arc(en.x, en.y, 15, 0, Math.PI * 2); ctx.fill();
+    });
+
+    // Projectiles
+    combat.projectiles.forEach(p => {
+        ctx.fillStyle = p.color || 'orange';
+        ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI * 2); ctx.fill();
+    });
+
+    // Portal
+    drawPortal(ctx, portal);
+
+    // LOCAL PLAYER
+    ctx.font = "36px serif"; ctx.textAlign = "center";
+    ctx.fillText(player.avatar, player.x, player.y + 12);
+
+    ctx.restore(); // ← End world space
+
+    // --- SCREEN SPACE (HUD, fixed UI) ---
+    if (gameState === 'MESSAGE') {
+        drawOverlayMessage(ctx, canvas, currentMessage);
+        return;
+    }
+
+    drawHUD(ctx, canvas, player);
+    drawSkillBar(ctx, canvas, player);
+    drawQuitButton(ctx, canvas);
+    drawTicker(ctx, canvas, tickerMsg);
 }
 
 
