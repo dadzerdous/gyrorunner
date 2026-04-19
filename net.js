@@ -14,7 +14,7 @@ export function connectNet() {
 
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
-    if (msg.type === "welcome") myId = msg.id;
+    if (msg.type === "welcome") { myId = msg.id; window._myId = msg.id; }
     if (msg.type === "state") {
       remotePlayers = msg.players;
       remoteEnemies = msg.enemies || [];
