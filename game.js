@@ -4,7 +4,7 @@ import { Player } from './entities.js';
 import { InputHandler } from './input.js';
 import { CombatSystem, AbilitySystem, updatePoisonZones, updateZombies, poisonZones, zombies, WAVE_CONFIG } from './systems.js';
 import { MapSystem } from './map.js';
-import { drawHUD, drawTicker, drawOverlayMessage, drawSkillBar, drawPortal, drawQuitButton, drawBossBar, drawWaveCounter, drawHubZones, drawPoisonZones, drawZombies, drawPlayerTag, drawEnemyBars, drawDeathScreen, skillButtons, quitButton } from './ui.js';
+import { drawHUD, drawTicker, drawOverlayMessage, drneawSkillBar, drawPortal, drawQuitButton, drawBossBar, drawWaveCounter, drawHubZones, drawPoisonZones, drawZombies, drawPlayerTag, drawEnemyBars, drawDeathScreen, skillButtons, quitButton } from './ui.js';
 import { connectNet, disconnectNet, sendMove, sendHit, sendReady, sendProfile, remoteEnemies, remotePlayers, portal, serverPhase, myId } from "./net.js";// ============================================================
 //  GOD MODE (set true for testing)
 // ============================================================
@@ -64,9 +64,9 @@ function initGame() {
         const loaded = player.loadProfile();
         if (loaded) {
             applyGodMode();
-            connectNet();
+connectNet();
 const profileInterval = setInterval(() => {
-    if (ws && ws.readyState === 1) {
+    if (isConnected()) {
         sendProfile(player.avatar, player.className, player.heroName || 'HERO');
         clearInterval(profileInterval);
     }
@@ -86,10 +86,9 @@ const profileInterval = setInterval(() => {
     // New game
     player.initClass(window._startClass || 'fire');
     applyGodMode();
-    connectNet();
-
+connectNet();
 const profileInterval = setInterval(() => {
-    if (ws && ws.readyState === 1) {
+    if (isConnected()) {
         sendProfile(player.avatar, player.className, player.heroName || 'HERO');
         clearInterval(profileInterval);
     }
