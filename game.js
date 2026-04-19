@@ -3,8 +3,7 @@ import { connectNet, disconnectNet, sendMove, sendHit, sendReady, sendProfile, i
 import { InputHandler } from './input.js';
 import { CombatSystem, AbilitySystem, updatePoisonZones, updateZombies, poisonZones, zombies, WAVE_CONFIG } from './systems.js';
 import { MapSystem } from './map.js';
-import { drawHUD, drawTicker, drawOverlayMessage, drneawSkillBar, drawPortal, drawQuitButton, drawBossBar, drawWaveCounter, drawHubZones, drawPoisonZones, drawZombies, drawPlayerTag, drawEnemyBars, drawDeathScreen, skillButtons, quitButton } from './ui.js';
-//  GOD MODE (set true for testing)
+import { drawHUD, drawTicker, drawOverlayMessage, drawSkillBar, drawPortal, drawQuitButton, drawBossBar, drawWaveCounter, drawHubZones, drawPoisonZones, drawZombies, drawPlayerTag, drawEnemyBars, drawDeathScreen, skillButtons, quitButton } from './ui.js';//  GOD MODE (set true for testing)
 // ============================================================
 const GOD_MODE = false;
 
