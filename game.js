@@ -69,6 +69,8 @@ const player   = new Player();
 const combat   = new CombatSystem();
 const abilitySys = new AbilitySystem(player);
 
+connectNet();
+
 // ============================================================
 //  GAME STATE
 // ============================================================
@@ -102,7 +104,7 @@ function initGame() {
         const loaded = player.loadProfile();
         if (loaded) {
             applyGodMode();
-connectNet();
+
 const profileInterval = setInterval(() => {
     if (isConnected()) {
         sendProfile(player.avatar, player.className, player.heroName || 'HERO');
@@ -124,7 +126,7 @@ const profileInterval = setInterval(() => {
     // New game
     player.initClass(window._startClass || 'fire');
     applyGodMode();
-connectNet();
+
 const profileInterval = setInterval(() => {
     if (isConnected()) {
         sendProfile(player.avatar, player.className, player.heroName || 'HERO');
