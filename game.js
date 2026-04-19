@@ -464,6 +464,7 @@ ctx.translate(-player.x, -player.y);
     // Remote players
 Object.values(remotePlayers).forEach(p => {
         if (p.id === myId || p.id === window._myId) return;
+        if (!p.avatar || p.avatar === '❓') return; // skip uninitialized players
         ctx.font = "32px serif";
         ctx.textAlign = "center";
         ctx.fillText(p.avatar || '🧙', p.x, p.y + 12);
