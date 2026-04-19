@@ -111,6 +111,7 @@ export class Player {
         this.controlMode = 'WAVE';
         this.activePad = null;
         this.currentDir = { x: 1, y: 0 };
+        this.heroName = 'HERO';
     }
 
     // --- Initialise class (called on hero select) ---
@@ -210,8 +211,9 @@ export class Player {
             stats: this.stats,
             statMax: this.statMax,
             baseHp: this.baseHp,
-            skills: this.skills,
-            weapons: this.weapons
+        skills: this.skills,
+        weapons: this.weapons,
+        heroName: this.heroName || 'HERO'
         };
         localStorage.setItem('spire_save', JSON.stringify(data));
     }
@@ -234,6 +236,7 @@ export class Player {
         this.statMax    = data.statMax     || { str:10, dex:8, con:5, int:15, wis:8 };
         this.baseHp     = data.baseHp      || 10;
         this.weapons    = data.weapons     || this.weapons;
+        this.heroName   = data.heroName    || 'HERO';
 
         // Restore skills preserving runtime state
         if (data.skills) {
