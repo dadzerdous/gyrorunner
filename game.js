@@ -54,7 +54,8 @@ let tickerMsg  = { text: "", x: 0 };
 let currentMessage = { title: "", body: "", color: '#ffcc00', big: false };
 let bombs      = 0;          // consumable from shop
 let panelOpen  = false;
-
+let loggedWaitingForState = false;
+let loggedFirstEnemySeen = false;
 // ============================================================
 //  WAIT FOR SPLASH → GAME READY SIGNAL
 // ============================================================
@@ -215,6 +216,17 @@ function checkLevelUp() {
 function update(time) {
     if (gameState === 'SPLASH' || gameState === 'MESSAGE') return;
     if (gameState === 'DEAD') return;
+    if (!hasReceivedFirstState && !loggedWaitingForState) {
+    loggedWaitingForState = true;
+    console.log("[GAME] update loop is running before first server state arrives");
+}
+
+if (hasReceivedFirstState && remoteEnemies.length > 0 && !loggedFirstEnemySeen) {
+    loggedFirstEnemySeen = true;
+    console.log(
+        `[GAME] first visible enemies detected at ${(performance.now() - netDebug.connectStartedAt).toFixed(1)} ms`
+    );
+}
 
     // --- APPLY STATS ---
     player.weapons[0].damage   = player.currentDamage;
