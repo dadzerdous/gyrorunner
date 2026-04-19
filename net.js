@@ -61,3 +61,6 @@ export function sendProfile(avatar, className, heroName) {
         ws.send(JSON.stringify({ type: "profile", avatar, className, heroName }));
     }
 }
+export function isConnected() {
+    return ws && ws.readyState === 1;
+}
