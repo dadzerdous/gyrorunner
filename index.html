@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>1.Spire O55nline</title>
+    <title>1.45Spire O55nline</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -798,19 +798,14 @@ function checkSave() {
         <div style="color:#888;font-size:11px">Stat Points: ${data.statPoints || 0} &nbsp; Skill Tokens: ${data.skillTokens || 0}</div>
     `;
 }
-
 function startNewGame() {
     if (!selectedClass) return;
     window._startClass = selectedClass;
+    window._continueGame = false;
     const nameInput = document.getElementById('hero-name-input');
     window._heroName = (nameInput?.value.trim() || 'HERO').toUpperCase().slice(0,8);
-    
-    window._continueGame = false;
-    const layout = document.getElementById('game-layout');
     document.getElementById('splash').style.display = 'none';
-    layout.style.display = 'block';
-
-    // Wait one frame for layout to paint, then size canvas
+    document.getElementById('game-layout').style.display = 'block';
     requestAnimationFrame(() => {
         resizeCanvas();
         window._gameReady = true;
@@ -819,9 +814,8 @@ function startNewGame() {
 
 function continueGame() {
     window._continueGame = true;
-    const layout = document.getElementById('game-layout');
     document.getElementById('splash').style.display = 'none';
-    layout.style.display = 'block';
+    document.getElementById('game-layout').style.display = 'block';
     requestAnimationFrame(() => {
         resizeCanvas();
         window._gameReady = true;
