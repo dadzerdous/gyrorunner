@@ -123,6 +123,7 @@ export class Player {
         this.className = def.name;
         this.baseHp = def.baseHp;
         this.hp = def.baseHp;
+        this.heroName = window._heroName || 'HERO';
 
         // Deep copy stats & limits
         this.stats = { ...def.baseStats };
