@@ -15,11 +15,37 @@ import {
     hasReceivedFirstState,
     netDebug
 } from "./net.js";
-import { InputHandler } from './input.js';
-import { CombatSystem, AbilitySystem, updatePoisonZones, updateZombies, poisonZones, zombies, WAVE_CONFIG } from './systems.js';
-import { MapSystem } from './map.js';
-import { drawHUD, drawTicker, drawOverlayMessage, drawSkillBar, drawPortal, drawQuitButton, drawBossBar, drawWaveCounter, drawHubZones, drawPoisonZones, drawZombies, drawPlayerTag, drawEnemyBars, drawDeathScreen, skillButtons, quitButton } from './ui.js';// ============================================================
-const GOD_MODE = false;
+
+import { Player } from "./entities.js";
+import { InputHandler } from "./input.js";
+import {
+    CombatSystem,
+    AbilitySystem,
+    updatePoisonZones,
+    updateZombies,
+    poisonZones,
+    zombies,
+    WAVE_CONFIG
+} from "./systems.js";
+import { MapSystem } from "./map.js";
+import {
+    drawHUD,
+    drawTicker,
+    drawOverlayMessage,
+    drawSkillBar,
+    drawPortal,
+    drawQuitButton,
+    drawBossBar,
+    drawWaveCounter,
+    drawHubZones,
+    drawPoisonZones,
+    drawZombies,
+    drawPlayerTag,
+    drawEnemyBars,
+    drawDeathScreen,
+    skillButtons,
+    quitButton
+} from "./ui.js";const GOD_MODE = false;
 
 // ============================================================
 //  CANVAS SETUP
