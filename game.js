@@ -377,7 +377,10 @@ function draw() {
 
     // --- WORLD SPACE ---
     ctx.save();
-    ctx.translate(canvas.width / 2 - player.x, canvas.height / 2 - player.y);
+const scale = Math.min(canvas.width, canvas.height) / (arenaSize * 2.2);
+ctx.translate(canvas.width / 2, canvas.height / 2);
+ctx.scale(scale, scale);
+ctx.translate(-player.x, -player.y);
 
     // Floor
     if (serverPhase === 'HUB') {
