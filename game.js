@@ -5,7 +5,7 @@ import { InputHandler } from './input.js';
 import { CombatSystem, AbilitySystem, updatePoisonZones, updateZombies, poisonZones, zombies, WAVE_CONFIG } from './systems.js';
 import { MapSystem } from './map.js';
 import { drawHUD, drawTicker, drawOverlayMessage, drawSkillBar, drawPortal, drawQuitButton, drawBossBar, drawWaveCounter, drawHubZones, drawPoisonZones, drawZombies, drawPlayerTag, drawEnemyBars, drawDeathScreen, skillButtons, quitButton } from './ui.js';
-
+import { connectNet, disconnectNet, sendMove, sendHit, sendReady, sendProfile, remoteEnemies, remotePlayers, portal, serverPhase, myId } from "./net.js";
 // ============================================================
 //  GOD MODE (set true for testing)
 // ============================================================
