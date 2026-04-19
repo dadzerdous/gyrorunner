@@ -65,6 +65,12 @@ function initGame() {
         if (loaded) {
             applyGodMode();
             connectNet();
+const profileInterval = setInterval(() => {
+    if (ws && ws.readyState === 1) {
+        sendProfile(player.avatar, player.className, player.heroName || 'HERO');
+        clearInterval(profileInterval);
+    }
+}, 100);
             hazards = MapSystem.generateHazards(arenaSize);
             gameState = 'MESSAGE';
             currentMessage = {
@@ -81,6 +87,13 @@ function initGame() {
     player.initClass(window._startClass || 'fire');
     applyGodMode();
     connectNet();
+
+const profileInterval = setInterval(() => {
+    if (ws && ws.readyState === 1) {
+        sendProfile(player.avatar, player.className, player.heroName || 'HERO');
+        clearInterval(profileInterval);
+    }
+}, 100);
     hazards = MapSystem.generateHazards(arenaSize);
     gameState = 'MESSAGE';
     currentMessage = {
