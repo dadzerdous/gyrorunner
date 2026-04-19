@@ -55,3 +55,9 @@ export function sendHit(enemyId, damage) {
 export function sendReady(status) {
     if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "playerReady", status }));
 }
+
+export function sendProfile(avatar, className, heroName) {
+    if (ws && ws.readyState === 1) {
+        ws.send(JSON.stringify({ type: "profile", avatar, className, heroName }));
+    }
+}
