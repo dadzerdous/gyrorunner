@@ -231,71 +231,68 @@
         }
 
         /* ── GAME LAYOUT ── */
-        #game-layout {
-            display: none;
-            width: 100vw;
-            height: 100vh;
-            position: relative;
-        }
+#game-layout {
+    display: none;
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+    overflow: hidden;
+}
 
-        #game-layout.panel-open #canvas-wrap {
-            right: 220px;
-        }
+#canvas-wrap {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    right: 0;
+    transition: right 0.25s ease;
+    overflow: hidden;
+}
 
-        #canvas-wrap {
-            position: absolute;
-            inset: 0;
-            right: 0;
-            transition: right 0.25s ease;
-        }
+#game-layout.panel-open #canvas-wrap {
+    right: 220px;
+}
 
-        #gameCanvas {
-            display: block;
-            width: 100%;
-            height: 100%;
-        }
+#gameCanvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
 
-        /* ── STATS PANEL ── */
-        #stats-panel {
-            position: absolute;
-            top: 0;
-            right: -220px;
-            width: 220px;
-            height: 100%;
-            background: #0d0d1a;
-            border-left: 2px solid #333;
-            overflow-y: auto;
-            transition: right 0.25s ease;
-            z-index: 20;
-            padding: 10px 10px 80px;
-        }
+#stats-panel {
+    position: absolute;
+    top: 0;
+    right: -220px;
+    width: 220px;
+    height: 100%;
+    background: #0d0d1a;
+    border-left: 2px solid #333;
+    overflow-y: auto;
+    transition: right 0.25s ease;
+    z-index: 20;
+    padding: 10px 10px 80px;
+}
 
-        #stats-panel.open { right: 0; }
+#stats-panel.open { right: 0; }
 
-        #panel-toggle {
-            position: absolute;
-            top: 50%;
-            right: 0;
-            transform: translateY(-50%);
-            background: #1a1a2e;
-            border: 2px solid #333;
-            border-right: none;
-            color: white;
-            font-size: 18px;
-            padding: 10px 6px;
-            cursor: pointer;
-            z-index: 21;
-            transition: right 0.25s ease;
-            writing-mode: vertical-rl;
-            letter-spacing: 2px;
-            font-family: 'Courier New', monospace;
-            font-size: 11px;
-        }
+#panel-toggle {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
+    background: #1a1a2e;
+    border: 2px solid #333;
+    border-right: none;
+    color: white;
+    padding: 10px 6px;
+    cursor: pointer;
+    z-index: 21;
+    transition: right 0.25s ease;
+    writing-mode: vertical-rl;
+    letter-spacing: 2px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+}
 
-        #stats-panel.open + #panel-toggle,
-        #panel-toggle.open {
-            right: 220px;
-        }
+#panel-toggle.open { right: 220px; }
 
         .panel-section {
             margin-bottom: 14px;
@@ -784,16 +781,25 @@ function startNewGame() {
     if (!selectedClass) return;
     window._startClass = selectedClass;
     window._continueGame = false;
+    const layout = document.getElementById('game-layout');
     document.getElementById('splash').style.display = 'none';
-    document.getElementById('game-layout').style.display = 'block';
-    window._gameReady = true;
+    layout.style.display = 'block';
+    // Wait one frame for layout to paint, then size canvas
+    requestAnimationFrame(() => {
+        resizeCanvas();
+        window._gameReady = true;
+    });
 }
 
 function continueGame() {
     window._continueGame = true;
+    const layout = document.getElementById('game-layout');
     document.getElementById('splash').style.display = 'none';
-    document.getElementById('game-layout').style.display = 'block';
-    window._gameReady = true;
+    layout.style.display = 'block';
+    requestAnimationFrame(() => {
+        resizeCanvas();
+        window._gameReady = true;
+    });
 }
 
 function deleteSave() {
@@ -810,7 +816,7 @@ let panelOpen = false;
 
 function togglePanel() {
     panelOpen = !panelOpen;
-    const panel = document.getElementById('stats-panel');
+    const panel  = document.getElementById('stats-panel');
     const toggle = document.getElementById('panel-toggle');
     const layout = document.getElementById('game-layout');
 
@@ -819,8 +825,8 @@ function togglePanel() {
     layout.classList.toggle('panel-open', panelOpen);
     toggle.textContent = panelOpen ? 'STATS ◂' : 'STATS ▸';
 
-    // Resize canvas
-    resizeCanvas();
+    // Wait for CSS transition to finish before resizing canvas
+    setTimeout(resizeCanvas, 260);
 }
 
 function resizeCanvas() {
