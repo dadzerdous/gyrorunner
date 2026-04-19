@@ -350,7 +350,7 @@ export function drawPlayerTag(ctx, player) {
     ctx.font = "bold 11px monospace";
     ctx.textAlign = "center";
     ctx.fillStyle = '#00ffcc';
-    ctx.fillText(player.className, player.x, player.y - 28);
+    ctx.fillText(player.heroName || player.className, player.x, player.y - 28);
 }
 
 // ============================================================
