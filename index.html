@@ -592,6 +592,28 @@
             <div id="preview-stats"></div>
             <div id="preview-skills" style="margin-top:10px; font-size:11px; color:#888; line-height:2"></div>
         </div>
+        <div style="margin-bottom:12px">
+    <label style="font-size:12px;color:#888;letter-spacing:1px;display:block;margin-bottom:6px">
+        HERO NAME (8 chars, no spaces)
+    </label>
+    <input 
+        id="hero-name-input"
+        maxlength="8"
+        placeholder="HERO"
+        style="
+            background:#111;
+            border:2px solid #333;
+            color:#ffcc00;
+            font-family:'Courier New',monospace;
+            font-size:16px;
+            padding:8px 12px;
+            width:100%;
+            letter-spacing:2px;
+            text-transform:uppercase;
+        "
+        oninput="this.value = this.value.replace(/\s/g,'').toUpperCase().slice(0,8)"
+    />
+</div>
         <button class="play-btn" id="play-btn" disabled onclick="startNewGame()">
             SELECT A CLASS TO BEGIN
         </button>
