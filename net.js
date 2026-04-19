@@ -34,7 +34,16 @@ export function disconnectNet() {
     remoteEnemies = [];
     portal = null;
 }
-
+export function sendProfile(avatar, className, heroName) {
+    if (ws && ws.readyState === 1) {
+        ws.send(JSON.stringify({ 
+            type: "profile", 
+            avatar, 
+            className,
+            heroName
+        }));
+    }
+}
 export function sendMove(x, y) {
   if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "move", x, y }));
 }
