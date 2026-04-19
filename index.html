@@ -784,6 +784,8 @@ function startNewGame() {
     const layout = document.getElementById('game-layout');
     document.getElementById('splash').style.display = 'none';
     layout.style.display = 'block';
+    const nameInput = document.getElementById('hero-name-input');
+window._heroName = nameInput.value.trim() || 'HERO';
     // Wait one frame for layout to paint, then size canvas
     requestAnimationFrame(() => {
         resizeCanvas();
