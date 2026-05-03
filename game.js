@@ -14,7 +14,7 @@ import {
     poisonZones, zombies, WAVE_CONFIG, CardSystem,
     tickItemPassives
 } from "./systems.js";
-import { MapSystem } from "./map.js";
+import { MapSystem, CorruptionSystem, GemSystem, drawMap, drawPurgeStones, drawGems, drawCorruption, drawCorruptionHUD, drawPurgeStoneHUD, drawMinimap, MAP_SIZE } from "./map.js";
 import {
     drawHUD, drawTicker, drawOverlayMessage,
     drawSkillBar, drawPortal, drawQuitButton,
@@ -57,7 +57,12 @@ const abilitySys = new AbilitySystem(player);
 //  GAME STATE
 // ============================================================
 let gameState       = 'SPLASH';   // SPLASH | MESSAGE | WAVE | DEAD | CARD_PICK
-let arenaSize       = 450;
+let arenaSize       = MAP_SIZE || 3000;
+let worldMap        = null;
+let corruptionSys   = null;
+let gemSystem       = null;
+let purgeStoneData  = [];
+let clusterData     = [];
 let shockwaves      = [];
 let hazards         = [];
 let tickerMsg       = { text: '', x: 0 };
@@ -114,6 +119,11 @@ function connectNetExtended() {
             if (msg.type === 'state' && msg.swarmTier !== undefined) {
                 _remoteSwarmTier = msg.swarmTier;
                 player.swarmTier = msg.swarmTier;
+                // Sync corruption, purge stones, clusters, gems
+                if (msg.corruption && corruptionSys) corruptionSys.applySync(msg.corruption);
+                if (msg.purgeStones) purgeStoneData = msg.purgeStones;
+                if (msg.clusters)    clusterData    = msg.clusters;
+                if (msg.gems && gemSystem) gemSystem.applySync(msg.gems);
             }
             // Kill XP
             if (msg.type === 'killXp') {
@@ -139,6 +149,12 @@ function connectNetExtended() {
                 if (msg.event === 'tierUp') showAnnouncement(`TIER ${msg.tier}`, 'The horde grows stronger', '#ff8800', false);
                 if (msg.event === 'bossIncoming') setTimeout(() => showAnnouncement('⚠️ BOSS INCOMING', 'Prepare yourself!', '#ff0044', true), 800);
                 if (msg.event === 'miniBossIncoming') setTimeout(() => showAnnouncement('⚡ MINI-BOSS', 'A powerful foe approaches', '#ff8800', false), 800);
+                if (msg.event === 'stoneActivated') window.triggerTicker(`🗿 PURGE STONE ACTIVATED!`);
+                if (msg.event === 'allStonesActivated') showAnnouncement('🗿 ALL STONES PURIFIED', 'Corruption retreating — BOSS INCOMING!', '#00ffcc', true);
+                if (msg.event === 'clusterCleared') window.triggerTicker('✅ CLUSTER CLEARED — corruption pushed back!');
+                if (msg.event === 'levelClear') showAnnouncement('✨ LEVEL CLEAR', 'Walk to center when ready for next level', '#ffcc00', true);
+                if (msg.event === 'runOver') showAnnouncement('💀 CORRUPTION CONSUMED YOU', 'Stay inside the boundary next time', '#cc00cc', true);
+                if (msg.event === 'finalBossSpawned') showAnnouncement('👹 FINAL BOSS', 'Destroy it to complete the level!', '#ff0000', true);
             }
             // Run result
             if (msg.type === 'runResult') _handleRunResult(msg);
@@ -171,11 +187,14 @@ requestAnimationFrame(waitForStart);
 function initGame() {
     connectNetExtended();
 
+    worldMap      = MapSystem.generate(Date.now());
+    corruptionSys = new CorruptionSystem(arenaSize);
+    gemSystem     = new GemSystem();
+
     if (window._continueGame) {
         const loaded = player.loadProfile();
         if (loaded) {
             _sendProfileWhenReady();
-            hazards    = MapSystem.generateHazards(arenaSize);
             gameState  = 'MESSAGE';
             currentMessage = {
                 title: 'WELCOME BACK',
@@ -191,11 +210,10 @@ function initGame() {
     player.initClass(window._startClass || 'fire');
     applyGodMode();
     _sendProfileWhenReady();
-    hazards   = MapSystem.generateHazards(arenaSize);
     gameState = 'MESSAGE';
     currentMessage = {
         title: 'ASCENSION BEGINS',
-        body:  `${player.avatar} ${player.className} — Survive the horde`,
+        body:  `${player.avatar} ${player.className} — Survive the corruption`,
         color: '#ffcc00', big: true
     };
     startLoop();
@@ -455,6 +473,20 @@ function update(time) {
         updateZombies(remoteEnemies, sendElementHit);
         combat.updateWeapons(player, remoteEnemies, time, sendElementHit, sendApplyStatus, shockwaves);
         combat.updateProjectiles(remoteEnemies, arenaSize, sendElementHit, sendApplyStatus, player, shockwaves);
+
+        // Gem collection
+        if (gemSystem) {
+            const collected = gemSystem.collectNear(player.x, player.y, 70);
+            collected.forEach(g => {
+                _sendRaw({ type: 'collectGem', gemId: g.id });
+            });
+        }
+
+        // Corruption damage
+        if (corruptionSys && corruptionSys.isCorrupted(player.x, player.y)) {
+            if (!GOD_MODE) player.hp -= corruptionSys.getDamage();
+            window.triggerTicker?.('☠️ CORRUPTION!');
+        }
     }
 
     // ── Clamp to arena ──
@@ -509,39 +541,29 @@ function draw() {
         return;
     }
 
-    // ── WORLD SPACE ──
+    // ── WORLD SPACE — camera follows player ──
     ctx.save();
-    const scale = Math.min(canvas.width, canvas.height) / (arenaSize * 2.2);
-    ctx.translate(canvas.width / 2, (canvas.height - 100) / 2); // offset up for skill bar
-    ctx.scale(scale, scale);
+    const VIEW_SCALE = Math.min(canvas.width, canvas.height) / 900;
+    ctx.translate(canvas.width / 2, (canvas.height - 100) / 2);
+    ctx.scale(VIEW_SCALE, VIEW_SCALE);
     ctx.translate(-player.x, -player.y);
 
-    // Floor
+    // Floor + terrain
     if (serverPhase === 'HUB') {
         _drawHubFloor();
-        drawHubZones(ctx, arenaSize);
+        drawHubZones(ctx, 600);
     } else {
-        _drawWaveFloor();
+        drawMap(ctx, worldMap, corruptionSys);
     }
 
-    // Arena border
-    ctx.lineWidth = 6;
-    ctx.strokeStyle = serverPhase === 'HUB' ? '#00ffcc22' : '#ffff0022';
-    ctx.strokeRect(-arenaSize, -arenaSize, arenaSize * 2, arenaSize * 2);
-    ctx.lineWidth = 1;
+    // Corruption fog (world space)
+    if (corruptionSys) drawCorruption(ctx, corruptionSys, arenaSize);
 
-    // Hazards
-    hazards.forEach(h => {
-        ctx.fillStyle   = h.type === 'BARRIER' ? '#334' : 'rgba(255,60,0,0.2)';
-        ctx.strokeStyle = h.type === 'BARRIER' ? '#556' : '#ff3300';
-        ctx.lineWidth = 1;
-        ctx.fillRect(h.x, h.y, 50, 50);
-        ctx.strokeRect(h.x, h.y, 50, 50);
-        ctx.font = '20px serif';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = h.type === 'BARRIER' ? '#778' : '#ff6633';
-        ctx.fillText(h.type === 'BARRIER' ? '🧱' : '🔺', h.x + 25, h.y + 30);
-    });
+    // Purge stones
+    drawPurgeStones(ctx, purgeStoneData);
+
+    // Gems
+    if (gemSystem) drawGems(ctx, gemSystem.gems);
 
     // Poison zones
     drawPoisonZones(ctx, poisonZones);
@@ -627,13 +649,64 @@ function draw() {
     }
 
     drawHUD(ctx, canvas, player);
+    drawCorruptionHUD(ctx, canvas, corruptionSys);
+    drawPurgeStoneHUD(ctx, canvas, purgeStoneData);
     drawWaveCounter(ctx, canvas, _remoteSwarmTier, serverPhase);
     drawBossBar(ctx, canvas, remoteEnemies);
+    drawMinimap(ctx, canvas, player, corruptionSys, purgeStoneData, clusterData, arenaSize);
+    _drawClassSkillIcon(ctx, canvas, player, abilitySys);
     drawSkillBar(ctx, canvas, player, abilitySys);
     drawBestiaryButton(ctx, canvas);
     drawQuitButton(ctx, canvas);
     drawTicker(ctx, canvas, tickerMsg);
     drawComboFlash(ctx, canvas);
+}
+
+// ============================================================
+//  CLASS SKILL HUD ICON (above playfield, left side)
+// ============================================================
+function _drawClassSkillIcon(ctx, canvas, player, abilitySys) {
+    const keys = player.getSkillKeys();
+    let activeSkill = null;
+    for (const key of keys) {
+        const sk = player.skills[key];
+        if (sk && sk.tier > 0) { activeSkill = sk; break; }
+    }
+    if (!activeSkill) return;
+
+    const size = 44;
+    const x = 14;
+    const y = canvas.height - 100 - size - 8;
+    const cdRatio = abilitySys ? abilitySys.getCooldownRatio(0) : 0;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.85)';
+    ctx.fillRect(x, y, size, size);
+    ctx.strokeStyle = cdRatio > 0 ? '#333' : '#00ffcc';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, size, size);
+
+    if (cdRatio > 0) {
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(x, y + size * (1 - cdRatio), size, size * cdRatio);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 14px "Courier New",monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(Math.ceil(cdRatio * 10), x + size / 2, y + size / 2 + 5);
+    } else {
+        ctx.font = '24px serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(activeSkill.icon, x + size / 2, y + size / 2 + 8);
+    }
+
+    ctx.fillStyle = '#00ffcc';
+    ctx.font = '7px "Courier New",monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('CLASS', x + size / 2, y + size + 10);
+
+    ctx.fillStyle = '#555';
+    ctx.font = '7px "Courier New",monospace';
+    ctx.fillText('[1]', x + size / 2, y + size + 19);
+    ctx.textAlign = 'left';
 }
 
 // ============================================================
