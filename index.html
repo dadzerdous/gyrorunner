@@ -568,12 +568,15 @@ function resizeCanvas() {
 window.updatePanel = function(player) {
     if (!player) return;
 
-    document.getElementById('panel-char-info').innerHTML = `
+    const _set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+    const _txt = (id, txt)  => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+
+    _set('panel-char-info', `
         <div style="font-size:22px">${player.avatar}</div>
         <div style="color:#ffcc00">${player.className} &nbsp; LV${player.level}</div>
         <div style="color:#666;font-size:10px">XP ${player.xp} / ${player.xpToNext}</div>
         <div style="color:#666;font-size:10px">💰 ${player.gold}</div>
-    `;
+    `);
 
     // Elements
     const elDiv = document.getElementById('panel-elements');
@@ -582,20 +585,15 @@ window.updatePanel = function(player) {
         elDiv.innerHTML = player.activeElements.map(el =>
             `<span style="margin-right:8px">${ELEMENTS[el]||''}  ${el.toUpperCase()}</span>`
         ).join('');
-        if (player.activeCombo) {
-            elDiv.innerHTML += `<div style="color:#ff8800;font-size:10px;margin-top:4px">⚡ COMBO ACTIVE</div>`;
-        }
-        if (player.overload) {
-            elDiv.innerHTML += `<div style="color:#ffcc00;font-size:10px">🔥 OVERLOAD ACTIVE</div>`;
-        }
+        if (player.activeCombo) elDiv.innerHTML += `<div style="color:#ff8800;font-size:10px;margin-top:4px">⚡ COMBO ACTIVE</div>`;
+        if (player.overload)    elDiv.innerHTML += `<div style="color:#ffcc00;font-size:10px">🔥 OVERLOAD ACTIVE</div>`;
     }
 
     // Stats
-    document.getElementById('panel-stat-points').textContent =
-        player.statPoints > 0 ? `(${player.statPoints} pts)` : '';
+    _txt('panel-stat-points', player.statPoints > 0 ? `(${player.statPoints} pts)` : '');
 
     const statColors = { str:'#ff6644', dex:'#ffcc00', con:'#ff4488', int:'#aa44ff', wis:'#44aaff' };
-    document.getElementById('panel-stats-rows').innerHTML =
+    _set('panel-stats-rows',
         Object.entries(player.stats).map(([k, v]) => {
             const max = player.statMax[k] || 10;
             const canUp = player.statPoints > 0 && v < max;
@@ -608,13 +606,13 @@ window.updatePanel = function(player) {
                 <span class="panel-stat-val">${v}</span>
                 <button class="panel-plus-btn" ${canUp?'':'disabled'} onclick="window.panelUpgradeStat('${k}')">+</button>
             </div>`;
-        }).join('');
+        }).join('')
+    );
 
     // Skills
-    document.getElementById('panel-skill-tokens').textContent =
-        player.skillTokens > 0 ? `(${player.skillTokens} tokens)` : '';
+    _txt('panel-skill-tokens', player.skillTokens > 0 ? `(${player.skillTokens} tokens)` : '');
 
-    document.getElementById('panel-skills-rows').innerHTML =
+    _set('panel-skills-rows',
         Object.entries(player.skills).map(([key, skill]) => {
             const unlocked = skill.tier > 0;
             const maxed = skill.tier >= skill.maxTier;
@@ -635,7 +633,8 @@ window.updatePanel = function(player) {
                     ${maxed ? '★ MAXED' : canUp ? '▲ UPGRADE' : '—'}
                 </button>
             </div>`;
-        }).join('');
+        }).join('')
+    );
 };
 
 // ════════════════════════════════════════
