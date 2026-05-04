@@ -1,9 +1,8 @@
 // game.js
 import {
-    connectNet, disconnectNet,
-    sendMove, sendHit, sendReady, sendProfile,
-    isConnected, remoteEnemies, remotePlayers,
-    portal, serverPhase, myId,
+    disconnectNet, sendMove, sendReady, sendProfile,
+    isConnected, remoteEnemies, remotePlayers, remoteGems,
+    serverPhase, myId, serverInitialized,
     hasReceivedFirstState, netDebug
 } from "./net.js";
 
@@ -56,7 +55,7 @@ const abilitySys = new AbilitySystem(player);
 // ============================================================
 //  GAME STATE
 // ============================================================
-let gameState       = 'SPLASH';   // SPLASH | MESSAGE | WAVE | DEAD | CARD_PICK
+let gameState       = 'WAVE';
 let arenaSize       = MAP_SIZE || 3000;
 let worldMap        = null;
 let corruptionSys   = null;
@@ -64,112 +63,25 @@ let gemSystem       = null;
 let purgeStoneData  = [];
 let clusterData     = [];
 let shockwaves      = [];
-let hazards         = [];
 let tickerMsg       = { text: '', x: 0 };
 let currentMessage  = { title: '', body: '', color: '#ffcc00', big: false };
 let bestiaryOpen    = false;
-let cardPickPending = false;      // block update while card picker is open
-let swarmTier       = 1;
-
-// net message extras beyond base net.js
+let cardPickPending = false;
 let _remoteSwarmTier = 1;
 
 // ============================================================
-//  NET EXTENSIONS — sendHit with element, sendApplyStatus
+//  NET HELPERS — send extended messages via shared raw WS
 // ============================================================
 function sendElementHit(enemyId, damage, element) {
-    if (isConnected()) {
-        const ws = window._ws; // exposed by net.js if needed — fallback below
-    }
-    // net.js sendHit only sends {type,enemyId,damage} — we extend it here
-    // by hooking into the raw ws. We re-export a local wrapper instead.
     _sendRaw({ type: 'hit', enemyId, damage, element: element || null });
 }
-
 function sendApplyStatus(enemyId, element, stacks = 1) {
     _sendRaw({ type: 'applyStatus', enemyId, element, stacks });
 }
-
 function _sendRaw(obj) {
     if (window._rawWs && window._rawWs.readyState === 1) {
         window._rawWs.send(JSON.stringify(obj));
     }
-}
-
-// ============================================================
-//  NET HOOK — expose raw WS so we can send extended messages
-//  Patch WebSocket BEFORE connectNet() is called so we capture
-//  the socket the moment net.js creates it.
-// ============================================================
-function connectNetExtended() {
-    // Patch WebSocket BEFORE connectNet() so we capture the socket
-    const _origWS = window.WebSocket;
-    window.WebSocket = function(...args) {
-        const ws = new _origWS(...args);
-
-        // Capture socket reference for _sendRaw
-        ws.addEventListener('open', () => { window._rawWs = ws; });
-
-        // Intercept extended server messages
-        ws.addEventListener('message', (e) => {
-            let msg;
-            try { msg = JSON.parse(e.data); } catch { return; }
-
-            // Swarm tier sync
-            if (msg.type === 'state' && msg.swarmTier !== undefined) {
-                _remoteSwarmTier = msg.swarmTier;
-                player.swarmTier = msg.swarmTier;
-                // Sync corruption, purge stones, clusters, gems
-                if (msg.corruption && corruptionSys) corruptionSys.applySync(msg.corruption);
-                if (msg.purgeStones) purgeStoneData = msg.purgeStones;
-                if (msg.clusters)    clusterData    = msg.clusters;
-                if (msg.gems && gemSystem) gemSystem.applySync(msg.gems);
-            }
-            // Kill XP
-            if (msg.type === 'killXp') {
-                player.xp += msg.amount;
-                player.runStats.kills++;
-                if (msg.enemyType === 'boss' || msg.enemyType === 'miniboss') player.runStats.bossKills++;
-                checkLevelUp();
-            }
-            // Hit result — bestiary
-            if (msg.type === 'hitResult') {
-                bestiary.recordHit(msg.enemyType || 'goblin', msg.attackElement, msg.enemyElement, msg.multiplier);
-                if (msg.multiplier >= 1.5) window.triggerTicker(`⚡ ${(msg.attackElement||'').toUpperCase()} SUPER EFFECTIVE! x${msg.multiplier}`);
-                else if (msg.multiplier <= 0.5) window.triggerTicker(`🛡️ ${(msg.attackElement||'').toUpperCase()} resisted (x${msg.multiplier})`);
-            }
-            // Cross-combo
-            if (msg.type === 'crossCombo') {
-                triggerComboFlash(msg.comboName, msg.color);
-                window.triggerTicker(`⚡ ${msg.comboName.toUpperCase()}!`);
-                player.runStats.crossCombos++;
-            }
-            // Events
-            if (msg.type === 'event') {
-                if (msg.event === 'tierUp') showAnnouncement(`TIER ${msg.tier}`, 'The horde grows stronger', '#ff8800', false);
-                if (msg.event === 'bossIncoming') setTimeout(() => showAnnouncement('⚠️ BOSS INCOMING', 'Prepare yourself!', '#ff0044', true), 800);
-                if (msg.event === 'miniBossIncoming') setTimeout(() => showAnnouncement('⚡ MINI-BOSS', 'A powerful foe approaches', '#ff8800', false), 800);
-                if (msg.event === 'stoneActivated') window.triggerTicker(`🗿 PURGE STONE ACTIVATED!`);
-                if (msg.event === 'allStonesActivated') showAnnouncement('🗿 ALL STONES PURIFIED', 'Corruption retreating — BOSS INCOMING!', '#00ffcc', true);
-                if (msg.event === 'clusterCleared') window.triggerTicker('✅ CLUSTER CLEARED — corruption pushed back!');
-                if (msg.event === 'levelClear') showAnnouncement('✨ LEVEL CLEAR', 'Walk to center when ready for next level', '#ffcc00', true);
-                if (msg.event === 'runOver') showAnnouncement('💀 CORRUPTION CONSUMED YOU', 'Stay inside the boundary next time', '#cc00cc', true);
-                if (msg.event === 'finalBossSpawned') showAnnouncement('👹 FINAL BOSS', 'Destroy it to complete the level!', '#ff0000', true);
-            }
-            // Run result
-            if (msg.type === 'runResult') _handleRunResult(msg);
-        });
-
-        return ws;
-    };
-    window.WebSocket.prototype  = _origWS.prototype;
-    window.WebSocket.CONNECTING = _origWS.CONNECTING;
-    window.WebSocket.OPEN       = _origWS.OPEN;
-    window.WebSocket.CLOSING    = _origWS.CLOSING;
-    window.WebSocket.CLOSED     = _origWS.CLOSED;
-
-    // Now connect — net.js will use our patched WebSocket
-    connectNet();
 }
 
 // ============================================================
@@ -185,38 +97,76 @@ requestAnimationFrame(waitForStart);
 //  INIT GAME
 // ============================================================
 function initGame() {
-    connectNetExtended();
+    // Net is already connected by index.html lobby flow.
+    // Register extended message handlers on the existing socket.
+    _hookNetMessages();
 
     worldMap      = MapSystem.generate(Date.now());
     corruptionSys = new CorruptionSystem(arenaSize);
     gemSystem     = new GemSystem();
 
-    if (window._continueGame) {
-        const loaded = player.loadProfile();
-        if (loaded) {
-            _sendProfileWhenReady();
-            gameState  = 'MESSAGE';
-            currentMessage = {
-                title: 'WELCOME BACK',
-                body:  `${player.avatar} ${player.className} — Level ${player.level}`,
-                color: '#00ffcc', big: false
-            };
-            startLoop();
-            return;
-        }
+    player.initClass(window._startClass || 'fire');
+    player.heroName = window._heroName || 'HERO';
+    applyGodMode();
+
+    // Send profile to server (already connected)
+    if (isConnected()) {
+        _sendRaw({ type:'profile', avatar:player.avatar, className:player.className, heroName:player.heroName, activeElements:player.activeElements||[player.element] });
     }
 
-    // New run
-    player.initClass(window._startClass || 'fire');
-    applyGodMode();
-    _sendProfileWhenReady();
-    gameState = 'MESSAGE';
-    currentMessage = {
-        title: 'ASCENSION BEGINS',
-        body:  `${player.avatar} ${player.className} — Survive the corruption`,
-        color: '#ffcc00', big: true
-    };
+    // Expose player globally for shop
+    window._player = player;
+
+    gameState = 'WAVE'; // start immediately — server already has enemies loaded
     startLoop();
+}
+
+// Hook extended net messages via the shared _rawWs
+function _hookNetMessages() {
+    const ws = window._rawWs;
+    if (!ws) return;
+    ws.addEventListener('message', (e) => {
+        let msg; try { msg=JSON.parse(e.data); } catch { return; }
+
+        if (msg.type==='state') {
+            if (msg.swarmTier!==undefined) { _remoteSwarmTier=msg.swarmTier; player.swarmTier=msg.swarmTier; }
+            if (msg.corruption && corruptionSys) corruptionSys.applySync(msg.corruption);
+            if (msg.purgeStones) purgeStoneData=msg.purgeStones;
+            if (msg.clusters)    clusterData=msg.clusters;
+            if (msg.gems && gemSystem) gemSystem.applySync(msg.gems);
+        }
+        if (msg.type==='killXp') {
+            player.xp+=msg.amount; player.runStats.kills++;
+            if (msg.enemyType==='boss'||msg.enemyType==='miniboss') player.runStats.bossKills++;
+            checkLevelUp();
+        }
+        if (msg.type==='hitResult') {
+            bestiary.recordHit(msg.enemyType||'goblin', msg.attackElement, msg.enemyElement, msg.multiplier);
+            if (msg.multiplier>=1.5) window.triggerTicker(`⚡ ${(msg.attackElement||'').toUpperCase()} SUPER EFFECTIVE! x${msg.multiplier}`);
+            else if (msg.multiplier<=0.5) window.triggerTicker(`🛡️ ${(msg.attackElement||'').toUpperCase()} resisted (x${msg.multiplier})`);
+        }
+        if (msg.type==='crossCombo') {
+            triggerComboFlash(msg.comboName, msg.color);
+            window.triggerTicker(`⚡ ${msg.comboName.toUpperCase()}!`);
+            player.runStats.crossCombos++;
+        }
+        if (msg.type==='gemCollected') {
+            player.xp += msg.value;
+            checkLevelUp();
+        }
+        if (msg.type==='event') {
+            if (msg.event==='tierUp')            showAnnouncement(`TIER ${msg.tier}`,'The horde grows stronger','#ff8800',false);
+            if (msg.event==='bossIncoming')      setTimeout(()=>showAnnouncement('⚠️ BOSS INCOMING','Prepare yourself!','#ff0044',true),800);
+            if (msg.event==='miniBossIncoming')  setTimeout(()=>showAnnouncement('⚡ MINI-BOSS','A powerful foe approaches','#ff8800',false),800);
+            if (msg.event==='stoneActivated')    window.triggerTicker('🗿 PURGE STONE ACTIVATED!');
+            if (msg.event==='allStonesActivated') showAnnouncement('🗿 ALL STONES PURIFIED','Corruption retreating — BOSS INCOMING!','#00ffcc',true);
+            if (msg.event==='clusterCleared')    window.triggerTicker('✅ CLUSTER CLEARED — corruption pushed back!');
+            if (msg.event==='levelClear')        showAnnouncement('✨ LEVEL CLEAR','Walk to center when ready','#ffcc00',true);
+            if (msg.event==='runOver')           showAnnouncement('💀 CORRUPTION CONSUMED YOU','Stay inside the boundary','#cc00cc',true);
+            if (msg.event==='finalBossSpawned')  showAnnouncement('👹 FINAL BOSS','Destroy it to complete the level!','#ff0000',true);
+        }
+        if (msg.type==='runResult') _handleRunResult(msg);
+    });
 }
 
 function _sendProfileWhenReady() {
@@ -801,7 +751,9 @@ function _handleQuitTouch(mx, my) {
         _handleRunResult({});
         player.saveProfile();
         disconnectNet();
-        location.reload();
+        document.getElementById('game-layout').style.display = 'none';
+        document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+        document.getElementById('screen-landing').classList.add('active');
     }
 }
 

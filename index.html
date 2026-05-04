@@ -5,398 +5,317 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>SPIRE ONLINE</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * { box-sizing:border-box; margin:0; padding:0; }
+        body { background:#000; font-family:'Courier New',monospace; color:white; overflow:hidden; height:100vh; width:100vw; }
 
-        body {
-            background: #000;
-            font-family: 'Courier New', monospace;
-            color: white;
-            overflow: hidden;
-            height: 100vh;
-            width: 100vw;
-        }
+        .screen { position:fixed; inset:0; display:none; flex-direction:column; align-items:center; justify-content:flex-start; overflow-y:auto; padding:24px 16px 40px; background:#080610; z-index:100; }
+        .screen.active { display:flex; }
 
-        /* ── SPLASH ── */
-        #splash {
-            position: fixed; inset: 0;
-            background: #080610;
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: flex-start;
-            z-index: 100; overflow-y: auto; padding: 20px;
-        }
+        /* LANDING */
+        #screen-landing { justify-content:center; }
+        .title-block { text-align:center; margin-bottom:44px; }
+        .title-block h1 { font-size:clamp(44px,10vw,72px); color:#ffcc00; letter-spacing:8px; text-shadow:0 0 40px #ff880066; }
+        .title-block .tagline { color:#333; font-size:10px; letter-spacing:4px; margin-top:8px; }
+        .nav-links { display:flex; flex-direction:column; gap:3px; width:100%; max-width:320px; }
+        .nav-link { display:block; padding:15px 20px; background:transparent; border:1px solid #1e1e1e; color:#666; font-family:'Courier New',monospace; font-size:13px; letter-spacing:2px; cursor:pointer; text-align:left; transition:0.12s; width:100%; position:relative; }
+        .nav-link:hover { border-color:#ffcc00; color:#ffcc00; background:#0a0800; }
+        .nav-link.primary { border-color:#00ffcc33; color:#00ffcc; }
+        .nav-link.primary:hover { border-color:#00ffcc; background:#001a14; }
+        .nav-link .arr { position:absolute; right:16px; top:50%; transform:translateY(-50%); opacity:0.3; }
+        .version { color:#1e1e1e; font-size:9px; letter-spacing:2px; margin-top:28px; }
 
-        #splash h1 {
-            font-size: clamp(26px, 6vw, 48px);
-            color: #ffcc00;
-            text-shadow: 0 0 30px #ff8800, 0 0 60px #ff440044;
-            margin: 16px 0 6px; letter-spacing: 6px;
-        }
+        /* PANEL WRAPPER */
+        .panel { width:100%; max-width:500px; }
+        .panel-header { display:flex; align-items:center; gap:12px; margin-bottom:18px; }
+        .back-btn { background:none; border:1px solid #222; color:#555; font-family:'Courier New',monospace; font-size:10px; padding:6px 12px; cursor:pointer; letter-spacing:1px; }
+        .back-btn:hover { border-color:#666; color:#aaa; }
+        .panel-title { color:#ffcc00; font-size:13px; letter-spacing:3px; font-weight:bold; }
 
-        .subtitle { color: #00ffcc; font-size: 11px; letter-spacing: 3px; margin-bottom: 20px; }
+        /* HOW TO PLAY */
+        .howto-section { border:1px solid #111; margin-bottom:2px; overflow:hidden; }
+        .howto-toggle { width:100%; background:#0a0814; border:none; color:#999; font-family:'Courier New',monospace; font-size:11px; padding:13px 16px; text-align:left; cursor:pointer; letter-spacing:1px; display:flex; justify-content:space-between; }
+        .howto-toggle:hover { background:#0f0c1a; color:#ccc; }
+        .howto-toggle.open { color:#ffcc00; }
+        .howto-body { display:none; padding:14px 16px; background:#060510; font-size:11px; color:#777; line-height:1.9; border-top:1px solid #111; }
+        .howto-body.open { display:block; }
+        .howto-body strong { color:#00ffcc; }
+        .el-chips { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
+        .el-chip { font-size:9px; padding:3px 7px; border:1px solid #1e1e1e; color:#666; }
+        .combo-row { font-size:11px; color:#777; margin:3px 0; }
+        .combo-row b { color:#ff8800; }
 
-        /* ── TABS ── */
-        .tab-bar {
-            display: flex; gap: 2px; margin-bottom: 18px;
-            border-bottom: 1px solid #222; width: 100%; max-width: 520px;
-        }
-        .tab-btn {
-            flex: 1; background: transparent; border: none;
-            border-bottom: 2px solid transparent;
-            color: #555; font-family: 'Courier New', monospace;
-            font-size: 11px; padding: 8px 4px; cursor: pointer;
-            letter-spacing: 1px; transition: 0.2s;
-        }
-        .tab-btn.active { color: #ffcc00; border-bottom-color: #ffcc00; }
-        .tab-content { display: none; width: 100%; max-width: 520px; }
-        .tab-content.active { display: block; animation: fadeIn 0.2s; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        /* CLASS SELECT */
+        .class-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:12px; }
+        .class-card { background:#0a0814; border:2px solid #111; padding:12px 8px; text-align:center; cursor:pointer; transition:0.12s; }
+        .class-card:hover { border-color:#333; }
+        .class-card.sel { border-color:#ffcc00; background:#0f0a00; }
+        .class-card .emo { font-size:30px; display:block; margin-bottom:5px; }
+        .class-card .cn  { color:#ffcc00; font-size:10px; font-weight:bold; letter-spacing:1px; }
+        .class-card .cs  { color:#333; font-size:9px; margin-top:3px; }
 
-        /* ── INSTRUCTIONS ── */
-        .instructions {
-            background: #0d0b14; border: 1px solid #222;
-            padding: 16px; font-size: 12px; line-height: 1.9;
-        }
-        .instructions h3 { color: #ffcc00; margin: 14px 0 4px; font-size: 11px; letter-spacing: 2px; }
-        .instructions p { color: #999; }
-        .inst-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
-        .inst-box {
-            background: #111; border: 1px solid #1e1e2e;
-            padding: 10px; font-size: 11px; color: #888;
-        }
-        .inst-box strong { color: #00ffcc; display: block; margin-bottom: 4px; }
+        .profile-xp { background:#0a0814; border:1px solid #111; padding:12px 14px; margin-bottom:10px; display:none; }
+        .profile-xp.vis { display:block; }
+        .plvl { color:#ffcc00; font-size:11px; font-weight:bold; }
+        .xp-bg { height:4px; background:#111; margin:6px 0 3px; }
+        .xp-fill { height:100%; background:#ffcc00; transition:width 0.4s; }
+        .xp-label { color:#444; font-size:9px; }
+        .unlock-list { margin-top:8px; }
+        .ul-row { display:flex; align-items:center; gap:7px; margin:3px 0; font-size:10px; }
+        .ul-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+        .ul-dot.done { background:#00ffcc; }
+        .ul-dot.next { background:#ffcc00; animation:blink 1s infinite; }
+        .ul-dot.lock { background:#1e1e1e; }
+        @keyframes blink { 0%,100%{opacity:1}50%{opacity:0.3} }
+        .ul-lbl { color:#333; }
+        .ul-lbl.done { color:#00ffcc55; }
+        .ul-lbl.next { color:#ffcc00; }
 
-        /* element badge row */
-        .el-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-        .el-badge {
-            font-size: 10px; padding: 3px 8px;
-            border: 1px solid #333; color: #aaa;
-            background: #111;
-        }
+        .field-label { font-size:9px; color:#444; letter-spacing:2px; display:block; margin-bottom:5px; }
+        .text-input { background:#0a0814; border:1px solid #1e1e1e; color:#ffcc00; font-family:'Courier New',monospace; font-size:15px; padding:10px 12px; width:100%; letter-spacing:2px; text-transform:uppercase; margin-bottom:10px; }
+        .text-input:focus { outline:none; border-color:#ffcc00; }
 
-        /* ── CLASS SELECT ── */
-        .class-grid {
-            display: grid; grid-template-columns: repeat(3, 1fr);
-            gap: 8px; margin-bottom: 14px;
-        }
-        .class-card {
-            background: #0d0b14; border: 2px solid #222;
-            padding: 14px 8px; text-align: center;
-            cursor: pointer; transition: 0.15s;
-        }
-        .class-card:hover, .class-card.selected {
-            border-color: #ffcc00; background: #15130a;
-        }
-        .class-card .emoji { font-size: 34px; display: block; margin-bottom: 6px; }
-        .class-card .cname { color: #ffcc00; font-size: 12px; font-weight: bold; letter-spacing: 1px; }
-        .class-card .cdesc { color: #666; font-size: 10px; margin-top: 4px; line-height: 1.4; }
-        .class-card .cel   { font-size: 14px; margin-top: 6px; display: block; }
+        /* LOBBY SELECT */
+        .big-btn { padding:14px 18px; background:transparent; border:1px solid #1e1e1e; color:#888; font-family:'Courier New',monospace; font-size:12px; letter-spacing:2px; cursor:pointer; text-align:left; width:100%; margin-bottom:3px; transition:0.12s; }
+        .big-btn:hover { border-color:#ffcc00; color:#ffcc00; background:#0a0800; }
+        .big-btn.pri { border-color:#00ffcc33; color:#00ffcc; }
+        .big-btn.pri:hover { border-color:#00ffcc; background:#001a14; }
+        .code-row { display:flex; gap:6px; margin-top:6px; }
+        .code-input { flex:1; background:#0a0814; border:1px solid #1e1e1e; color:#ffcc00; font-family:'Courier New',monospace; font-size:20px; padding:10px 12px; letter-spacing:6px; text-transform:uppercase; text-align:center; }
+        .code-input:focus { outline:none; border-color:#ffcc00; }
+        .code-join-btn { padding:10px 16px; background:#ffcc00; color:#000; border:none; font-family:'Courier New',monospace; font-size:11px; font-weight:bold; cursor:pointer; letter-spacing:1px; }
+        .err { color:#ff4444; font-size:10px; margin-top:6px; min-height:14px; letter-spacing:1px; }
 
-        .class-stats {
-            display: none; background: #0d0b14; border: 1px solid #222;
-            padding: 12px; margin-bottom: 10px; font-size: 12px;
-        }
-        .class-stats.visible { display: block; }
-        .class-stats h4 { color: #00ffcc; margin-bottom: 8px; letter-spacing: 1px; }
-        .stat-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
-        .stat-label { width: 32px; color: #666; font-size: 10px; }
-        .stat-bar-bg { flex: 1; height: 5px; background: #1a1a1a; }
-        .stat-bar-fill { height: 100%; background: #ffcc00; transition: width 0.3s; }
-        .stat-val { width: 18px; text-align: right; color: #ccc; font-size: 10px; }
+        /* WAITING ROOM */
+        .lobby-code-box { background:#0a0814; border:1px solid #1e1e1e; padding:16px; text-align:center; margin-bottom:14px; }
+        .lobby-code { font-size:38px; color:#ffcc00; letter-spacing:10px; font-weight:bold; }
+        .lobby-code-hint { color:#333; font-size:9px; letter-spacing:2px; margin-top:3px; }
+        .roster { display:flex; flex-direction:column; gap:5px; margin-bottom:14px; min-height:50px; }
+        .roster-row { background:#0a0814; border:1px solid #111; padding:10px 12px; display:flex; align-items:center; gap:10px; }
+        .r-avatar { font-size:22px; }
+        .r-info { flex:1; }
+        .r-name { color:#ccc; font-size:11px; letter-spacing:1px; }
+        .r-class { color:#555; font-size:9px; }
+        .r-badge { font-size:8px; letter-spacing:2px; margin-left:auto; }
+        .r-badge.host { color:#ffcc00; }
+        .r-badge.you  { color:#00ffcc; }
+        .waiting-hint { color:#333; font-size:10px; letter-spacing:1px; margin-bottom:12px; text-align:center; }
+        .start-btn { width:100%; padding:15px; background:#ffcc00; color:#000; border:none; font-family:'Courier New',monospace; font-size:14px; font-weight:bold; letter-spacing:3px; cursor:pointer; }
+        .start-btn:disabled { background:#1e1e1e; color:#444; cursor:default; }
 
-        /* class profile badge */
-        .profile-badge {
-            display: none; background: #111; border: 1px solid #333;
-            padding: 8px 12px; margin-bottom: 8px; font-size: 11px;
-            color: #888; line-height: 1.8;
-        }
-        .profile-badge.visible { display: block; }
-        .profile-badge .plvl { color: #ffcc00; font-weight: bold; }
+        /* LOADING */
+        #screen-loading { justify-content:center; gap:16px; }
+        .load-spin { font-size:44px; animation:spin 2s linear infinite; }
+        @keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+        .load-text { color:#00ffcc; font-size:12px; letter-spacing:4px; }
+        .load-sub  { color:#222; font-size:9px; letter-spacing:2px; }
 
-        /* ── NAME INPUT ── */
-        .name-wrap { margin-bottom: 10px; }
-        .name-label { font-size: 10px; color: #666; letter-spacing: 1px; display: block; margin-bottom: 5px; }
-        #hero-name-input {
-            background: #0d0b14; border: 1px solid #333; color: #ffcc00;
-            font-family: 'Courier New', monospace; font-size: 15px;
-            padding: 8px 10px; width: 100%; letter-spacing: 2px;
-            text-transform: uppercase;
-        }
-        #hero-name-input:focus { outline: none; border-color: #ffcc00; }
+        /* BESTIARY */
+        .bestiary-grid { display:flex; flex-direction:column; gap:5px; }
+        .b-row { background:#0a0814; border:1px solid #111; padding:11px; display:flex; gap:11px; }
+        .b-emoji { font-size:26px; flex-shrink:0; }
+        .b-info { flex:1; }
+        .b-name { color:#ccc; font-size:11px; font-weight:bold; margin-bottom:3px; letter-spacing:1px; }
+        .b-unknown { color:#222; font-size:10px; }
+        .b-badges { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
+        .b-badge { font-size:9px; padding:2px 6px; }
+        .b-badge.str { background:#001800; border:1px solid #00aa33; color:#00ff66; }
+        .b-badge.wk  { background:#180000; border:1px solid #aa3333; color:#ff6666; }
 
-        /* ── BUTTONS ── */
-        .play-btn {
-            width: 100%; padding: 13px;
-            background: #ffcc00; color: #000;
-            border: none; font-family: 'Courier New', monospace;
-            font-size: 16px; font-weight: bold;
-            letter-spacing: 3px; cursor: pointer; transition: 0.15s;
-            margin-top: 6px;
-        }
-        .play-btn:hover:not(:disabled) { background: #ffe044; }
-        .play-btn:disabled { background: #333; color: #666; cursor: default; }
-        .continue-btn {
-            width: 100%; padding: 13px; background: #00aa44; color: #fff;
-            border: none; font-family: 'Courier New', monospace; font-size: 15px;
-            font-weight: bold; letter-spacing: 2px; cursor: pointer; margin-bottom: 8px;
-        }
-        .delete-btn {
-            width: 100%; padding: 10px; background: transparent; color: #ff4444;
-            border: 1px solid #440000; font-family: 'Courier New', monospace;
-            font-size: 12px; cursor: pointer; letter-spacing: 1px;
-        }
-
-        /* ── GAME LAYOUT ── */
-        #game-layout {
-            display: none; position: fixed; inset: 0;
-            flex-direction: row;
-        }
-        #game-layout.panel-open #canvas-wrap { margin-right: 220px; }
-
-        #canvas-wrap {
-            flex: 1; position: relative;
-            transition: margin-right 0.25s; overflow: hidden;
-        }
-
-        #ui-layer {
-            position: absolute; inset: 0; pointer-events: none; z-index: 10;
-        }
-        #ui-layer .menu { pointer-events: all; }
-
-        canvas {
-            display: block; width: 100%; height: 100%;
-            touch-action: none;
-        }
-
-        /* ── MENUS ── */
-        .menu {
-            position: absolute; inset: 0;
-            background: rgba(0,0,0,0.94);
-            display: none; flex-direction: column;
-            align-items: center; justify-content: center;
-            padding: 20px; text-align: center;
-            font-family: 'Courier New', monospace;
-            z-index: 20;
-        }
-        .menu h1 { font-size: 20px; margin-bottom: 12px; }
-
-        .shop-grid {
-            display: grid; grid-template-columns: repeat(2, 1fr);
-            gap: 8px; width: 100%; max-width: 360px; margin-bottom: 14px;
-        }
-        .shop-item {
-            background: #111; border: 1px solid #222;
-            padding: 10px; text-align: center;
-        }
-        .shop-item h3 { font-size: 13px; color: #ffcc00; margin-bottom: 4px; }
-        .shop-item p  { font-size: 10px; color: #888; margin-bottom: 8px; }
-        .buy-btn {
-            background: #222; border: 1px solid #ffcc00; color: #ffcc00;
-            font-family: 'Courier New', monospace; font-size: 11px;
-            padding: 5px 12px; cursor: pointer;
-        }
-        .buy-btn:hover { background: #332200; }
-
-        .hud-btn {
-            margin-top: 10px; padding: 10px 24px;
-            background: transparent; border: 1px solid #444; color: #aaa;
-            font-family: 'Courier New', monospace; font-size: 12px;
-            cursor: pointer; letter-spacing: 1px;
-        }
-
-        /* ── STATS PANEL ── */
-        #stats-panel {
-            position: fixed; right: -220px; top: 0; bottom: 0; width: 220px;
-            background: #0a0812; border-left: 1px solid #1e1e2e;
-            overflow-y: auto; transition: right 0.25s;
-            padding: 12px; font-size: 12px; z-index: 50;
-        }
-        #stats-panel.open { right: 0; }
-        .panel-section { margin-bottom: 18px; }
-        .panel-section h3 {
-            color: #ffcc00; font-size: 10px; letter-spacing: 2px;
-            margin-bottom: 8px; border-bottom: 1px solid #1e1e1e; padding-bottom: 4px;
-        }
-        .panel-stat-row { display: flex; align-items: center; gap: 6px; margin: 5px 0; }
-        .panel-stat-label { width: 30px; color: #666; font-size: 10px; }
-        .panel-stat-bar { flex: 1; height: 4px; background: #1a1a1a; }
-        .panel-stat-fill { height: 100%; transition: width 0.3s; }
-        .panel-stat-val { width: 16px; color: #ccc; font-size: 10px; text-align: right; }
-        .panel-plus-btn {
-            background: transparent; border: 1px solid #333; color: #ffcc00;
-            font-family: 'Courier New', monospace; font-size: 11px;
-            width: 22px; height: 22px; cursor: pointer; line-height: 1;
-        }
-        .panel-plus-btn:disabled { color: #333; border-color: #1a1a1a; cursor: default; }
-
-        /* skill rows in panel */
-        .skill-panel-row {
-            background: #0d0b14; border: 1px solid #1e1e1e;
-            padding: 8px; margin-bottom: 6px; opacity: 0.5;
-        }
-        .skill-panel-row.unlocked { opacity: 1; }
-        .skill-panel-row.maxed { border-color: #ffcc0044; }
-        .skill-panel-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-        .skill-icon { font-size: 16px; }
-        .skill-name { flex: 1; color: #ccc; font-size: 11px; }
-        .skill-tier-label { color: #888; font-size: 9px; letter-spacing: 1px; }
-        .skill-desc { color: #555; font-size: 10px; line-height: 1.5; margin-bottom: 5px; }
-        .tier-pips { display: flex; gap: 4px; }
-        .pip { width: 10px; height: 4px; background: #222; }
-        .pip.filled { background: #ffcc00; }
-        .skill-upgrade-btn {
-            width: 100%; background: transparent; border: 1px solid #333; color: #888;
-            font-family: 'Courier New', monospace; font-size: 9px;
-            padding: 4px; cursor: pointer; letter-spacing: 1px;
-        }
-        .skill-upgrade-btn:not(:disabled):hover { border-color: #00ffcc; color: #00ffcc; }
-        .skill-upgrade-btn:disabled { cursor: default; }
-
-        #panel-toggle {
-            position: fixed; right: 0; top: 50%; transform: translateY(-50%);
-            background: #0a0812; border: 1px solid #222; border-right: none;
-            color: #666; font-family: 'Courier New', monospace; font-size: 9px;
-            padding: 10px 6px; cursor: pointer; letter-spacing: 1px;
-            writing-mode: vertical-rl; z-index: 51;
-            transition: right 0.25s;
-        }
-        #panel-toggle.open { right: 220px; }
-
-        /* ── SKILL BAR ZONE indicator ── */
-        #skill-bar-bg {
-            position: absolute; bottom: 0; left: 0; right: 0; height: 100px;
-            background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
-            pointer-events: none; z-index: 5;
-        }
+        /* GAME */
+        #game-layout { display:none; position:fixed; inset:0; }
+        #canvas-wrap { position:absolute; inset:0; }
+        #skill-bar-bg { position:absolute; bottom:0; left:0; right:0; height:110px; background:linear-gradient(to top,rgba(0,0,0,0.8),transparent); pointer-events:none; }
+        canvas { display:block; width:100%; height:100%; touch-action:none; }
+        .menu { position:absolute; inset:0; background:rgba(0,0,0,0.94); display:none; flex-direction:column; align-items:center; justify-content:center; padding:20px; text-align:center; font-family:'Courier New',monospace; z-index:20; }
+        .shop-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; width:100%; max-width:340px; margin-bottom:14px; }
+        .shop-item { background:#111; border:1px solid #1e1e1e; padding:10px; }
+        .shop-item h3 { font-size:12px; color:#ffcc00; margin-bottom:4px; }
+        .shop-item p  { font-size:9px; color:#666; margin-bottom:7px; }
+        .buy-btn { background:#1e1e1e; border:1px solid #ffcc00; color:#ffcc00; font-family:'Courier New',monospace; font-size:10px; padding:4px 10px; cursor:pointer; }
+        .hud-btn { margin-top:10px; padding:9px 20px; background:transparent; border:1px solid #333; color:#888; font-family:'Courier New',monospace; font-size:11px; cursor:pointer; letter-spacing:1px; }
     </style>
 </head>
 <body>
 
-<!-- ═══════════════════════════════════════
-     SPLASH SCREEN
-═══════════════════════════════════════ -->
-<div id="splash">
-    <h1>SPIRE</h1>
-    <div class="subtitle">ONLINE  ·  MULTIPLAYER SURVIVOR</div>
-
-    <div class="tab-bar">
-        <button class="tab-btn active" onclick="showTab('tab-instructions')">HOW TO PLAY</button>
-        <button class="tab-btn" onclick="showTab('tab-select')">SELECT CLASS</button>
-        <button class="tab-btn" id="continue-tab-btn" style="display:none" onclick="showTab('tab-continue')">CONTINUE</button>
+<!-- LANDING -->
+<div id="screen-landing" class="screen active">
+    <div class="title-block">
+        <h1>SPIRE</h1>
+        <div class="tagline">ONLINE  ·  MULTIPLAYER SURVIVOR</div>
     </div>
+    <nav class="nav-links">
+        <button class="nav-link primary" onclick="showScreen('screen-class')">▶ NEW GAME <span class="arr">›</span></button>
+        <button class="nav-link" onclick="showScreen('screen-howto')">HOW TO PLAY <span class="arr">›</span></button>
+        <button class="nav-link" onclick="showBestiarySplash()">BESTIARY <span class="arr">›</span></button>
+    </nav>
+    <div class="version">v0.5 · SPIRE ONLINE</div>
+</div>
 
-    <!-- INSTRUCTIONS -->
-    <div id="tab-instructions" class="tab-content active">
-        <div class="instructions">
-            <h3>🎮 MOVEMENT</h3>
-            <p>Swipe anywhere on the screen to move in that direction.<br>
-               Release to stop. Desktop: WASD or arrow keys.</p>
-
-            <h3>⚔️ COMBAT</h3>
-            <p>Your weapon auto-attacks the nearest enemy.<br>
-               Tap the 3 skill buttons at the bottom to activate abilities.<br>
-               Desktop: keys 1 2 3.</p>
-
-            <h3>⚗️ ELEMENTS</h3>
-            <p>Every class starts with a base element. Level up your Class Profile
-               to unlock more elements to equip. Your equipped element combines with
-               your weapon's element — matching elements cause <strong style="color:#ffcc00">OVERLOAD</strong>
-               and two different elements create a <strong style="color:#ff8800">COMBO</strong>.</p>
-            <div class="el-row">
-                <span class="el-badge">🔥 Fire</span>
-                <span class="el-badge">💧 Water</span>
-                <span class="el-badge">❄️ Ice</span>
-                <span class="el-badge">⚡ Lightning</span>
-                <span class="el-badge">☠️ Poison</span>
-                <span class="el-badge">🪨 Earth</span>
-                <span class="el-badge">🌑 Dark</span>
-                <span class="el-badge">✨ Light</span>
-                <span class="el-badge">💫 Holy</span>
-                <span class="el-badge">💀 Necrotic</span>
-                <span class="el-badge">🌀 Void</span>
-                <span class="el-badge">🌪️ Wind</span>
-            </div>
-
-            <h3>🤝 MULTIPLAYER COMBOS</h3>
-            <p>When a teammate applies a status (e.g. Freeze) and you hit with a
-               matching element (e.g. Fire), a <strong style="color:#ff8800">CROSS-COMBO</strong> triggers
-               for massive bonus damage. Coordinate your elements!</p>
-
-            <h3>📈 PROGRESSION</h3>
-            <div class="inst-grid">
-                <div class="inst-box">
-                    <strong>In-Run Level Up</strong>
-                    Pick a card: class skill, weapon skill, item, or element
-                </div>
-                <div class="inst-box">
-                    <strong>Weapon XP</strong>
-                    Use a weapon to rank it up — unlocks new skills
-                </div>
-                <div class="inst-box">
-                    <strong>Class Profile</strong>
-                    Earn class XP after each run — unlocks elements and perks permanently
-                </div>
-                <div class="inst-box">
-                    <strong>📖 Bestiary</strong>
-                    Fight enemies with different elements to reveal their weaknesses
+<!-- HOW TO PLAY -->
+<div id="screen-howto" class="screen">
+    <div class="panel">
+        <div class="panel-header">
+            <button class="back-btn" onclick="showScreen('screen-landing')">← BACK</button>
+            <span class="panel-title">HOW TO PLAY</span>
+        </div>
+        <div id="howto-list">
+            <div class="howto-section">
+                <button class="howto-toggle" onclick="toggleSection(this)">🎮 MOVEMENT &amp; COMBAT <span>›</span></button>
+                <div class="howto-body">
+                    <strong>Move:</strong> Swipe anywhere on screen — release to stop. WASD on desktop.<br><br>
+                    <strong>Attack:</strong> Automatic — targets nearest enemy.<br><br>
+                    <strong>Abilities:</strong> 3 large buttons at the bottom. Keys 1 2 3 on desktop. Your class skill also floats as an icon above the left skill button.
                 </div>
             </div>
-
-            <h3>🌑 CORRUPTION</h3>
-            <p>Enemies spawn continuously and escalate every 45 seconds (TIER UP).<br>
-               Every 5 tiers: Mini-Boss. Every 10 tiers: Boss wave.<br>
-               Defeat the Boss to open the Portal and enter the Hub.</p>
-
-            <h3>🏪 HUB</h3>
-            <p>Walk into glowing zones to shop, upgrade stats, or train skills.<br>
-               Walk north when ready for the next tier.</p>
+            <div class="howto-section">
+                <button class="howto-toggle" onclick="toggleSection(this)">⚗️ ELEMENTS &amp; COMBOS <span>›</span></button>
+                <div class="howto-body">
+                    Each class starts with a base element. Level up your Class Profile to unlock more.<br><br>
+                    <strong>Overload:</strong> Your class element matches weapon element → enhanced effects.<br>
+                    <strong>Combo:</strong> Two different elements equipped → combo element activates automatically.<br><br>
+                    <div class="el-chips">
+                        <span class="el-chip">🔥 Fire</span><span class="el-chip">💧 Water</span><span class="el-chip">❄️ Ice</span>
+                        <span class="el-chip">⚡ Lightning</span><span class="el-chip">☠️ Poison</span><span class="el-chip">🪨 Earth</span>
+                        <span class="el-chip">🌑 Dark</span><span class="el-chip">✨ Light</span><span class="el-chip">💫 Holy</span>
+                        <span class="el-chip">💀 Necrotic</span><span class="el-chip">🌀 Void</span><span class="el-chip">🌪️ Wind</span>
+                    </div>
+                    <br>
+                    <div class="combo-row"><b>Plasma ⚡🔥</b> = Fire + Lightning</div>
+                    <div class="combo-row"><b>Blizzard 🌨️</b> = Water + Ice</div>
+                    <div class="combo-row"><b>Leech 🩸</b> = Poison + Necrotic</div>
+                    <div class="combo-row"><b>Acid 🧪</b> = Fire + Poison</div>
+                    <div class="combo-row"><b>Chaos 🌀</b> = Dark + Void</div>
+                </div>
+            </div>
+            <div class="howto-section">
+                <button class="howto-toggle" onclick="toggleSection(this)">🤝 MULTIPLAYER COMBOS <span>›</span></button>
+                <div class="howto-body">
+                    Teammate applies a status, you hit with the matching element = <strong>CROSS-COMBO</strong> for massive damage.<br><br>
+                    🧊 Freeze + 🔥 Fire = <strong>SHATTER</strong> (3× damage)<br>
+                    💧 Soaked + ⚡ Lightning = <strong>CONDUCTANCE</strong> (chains all)<br>
+                    ☠️ Poisoned + 🔥 Fire = <strong>VENOM FLARE</strong> (AOE)<br>
+                    🌑 Cursed + 💫 Holy = <strong>EXORCISM</strong> (4× damage)
+                </div>
+            </div>
+            <div class="howto-section">
+                <button class="howto-toggle" onclick="toggleSection(this)">🌑 CORRUPTION &amp; PURGE STONES <span>›</span></button>
+                <div class="howto-body">
+                    Darkness creeps inward from the map edges. Stay inside or take damage — if it fully closes, you lose.<br><br>
+                    <strong>Clear enemy clusters</strong> to push it back.<br><br>
+                    <strong>Find 3 Purge Stones</strong> on the map. Stand on one to channel it (5 seconds, interrupted by hits).<br><br>
+                    All 3 activated → corruption reverses → <strong>Final Boss spawns</strong>. Kill it to win the level.
+                </div>
+            </div>
+            <div class="howto-section">
+                <button class="howto-toggle" onclick="toggleSection(this)">📈 PROGRESSION <span>›</span></button>
+                <div class="howto-body">
+                    <strong>In-Run:</strong> Kill enemies → XP → level up → pick a card (class skill / weapon skill / item / element).<br><br>
+                    Collect <strong>XP gems</strong> dropped by enemies for bonus XP.<br><br>
+                    <strong>Weapon XP:</strong> Use a weapon to rank it up, unlocking passive skills.<br><br>
+                    <strong>Class Profile:</strong> Earns XP after runs. Each level permanently unlocks elements and perks.
+                </div>
+            </div>
+            <div class="howto-section">
+                <button class="howto-toggle" onclick="toggleSection(this)">🏠 LOBBIES <span>›</span></button>
+                <div class="howto-body">
+                    <strong>Quick Join:</strong> Instantly joins or creates a public lobby.<br>
+                    <strong>Create Private:</strong> Generates a 4-letter code to share with friends.<br>
+                    <strong>Join with Code:</strong> Enter a friend's code.<br><br>
+                    The host hits START when everyone is in. The game won't begin until the world is fully loaded — no empty arenas.
+                </div>
+            </div>
         </div>
-        <button class="play-btn" style="margin-top:14px" onclick="showTab('tab-select')">
-            SELECT CLASS →
-        </button>
-    </div>
-
-    <!-- CLASS SELECT -->
-    <div id="tab-select" class="tab-content">
-        <div class="class-grid" id="class-grid"></div>
-
-        <div class="profile-badge" id="profile-badge"></div>
-
-        <div class="class-stats" id="class-stats-preview">
-            <h4 id="preview-name">SELECT A CLASS</h4>
-            <div id="preview-stats"></div>
-            <div id="preview-skills" style="margin-top:10px;font-size:11px;color:#666;line-height:2"></div>
-            <div id="preview-element" style="margin-top:8px;font-size:11px;color:#888"></div>
-        </div>
-
-        <div class="name-wrap">
-            <label class="name-label">HERO NAME (8 chars)</label>
-            <input id="hero-name-input" maxlength="8" placeholder="HERO"
-                oninput="this.value=this.value.replace(/\s/g,'').toUpperCase().slice(0,8)">
-        </div>
-
-        <button class="play-btn" id="play-btn" disabled onclick="startNewGame()">
-            SELECT A CLASS TO BEGIN
-        </button>
-    </div>
-
-    <!-- CONTINUE -->
-    <div id="tab-continue" class="tab-content">
-        <div id="save-summary" style="background:#0d0b14;border:1px solid #222;padding:16px;margin-bottom:12px;font-size:12px;line-height:2"></div>
-        <button class="continue-btn" onclick="continueGame()">▶ CONTINUE</button>
-        <button class="delete-btn" onclick="deleteSave()">✕ DELETE SAVE &amp; START OVER</button>
     </div>
 </div>
 
-<!-- ═══════════════════════════════════════
-     GAME LAYOUT
-═══════════════════════════════════════ -->
+<!-- CLASS SELECT -->
+<div id="screen-class" class="screen">
+    <div class="panel">
+        <div class="panel-header">
+            <button class="back-btn" onclick="showScreen('screen-landing')">← BACK</button>
+            <span class="panel-title">SELECT CLASS</span>
+        </div>
+        <div class="class-cards" id="class-cards"></div>
+        <div class="profile-xp" id="profile-xp">
+            <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+                <span class="plvl" id="plvl">CLASS LV1</span>
+                <span style="color:#444;font-size:9px" id="pruns">0 runs</span>
+            </div>
+            <div class="xp-bg"><div class="xp-fill" id="xp-fill" style="width:0%"></div></div>
+            <div class="xp-label" id="xp-label">0 / 200 XP to next level</div>
+            <div class="unlock-list" id="unlock-list"></div>
+        </div>
+        <label class="field-label">HERO NAME</label>
+        <input class="text-input" id="hero-name-input" maxlength="8" placeholder="HERO"
+            oninput="this.value=this.value.replace(/\s/g,'').toUpperCase().slice(0,8)">
+        <button class="big-btn pri" id="next-btn" disabled onclick="showScreen('screen-lobby')">
+            CHOOSE LOBBY → <span id="next-name"></span>
+        </button>
+    </div>
+</div>
+
+<!-- LOBBY SELECT -->
+<div id="screen-lobby" class="screen">
+    <div class="panel">
+        <div class="panel-header">
+            <button class="back-btn" onclick="showScreen('screen-class')">← BACK</button>
+            <span class="panel-title">LOBBY</span>
+        </div>
+        <button class="big-btn pri" onclick="doQuickJoin()">⚡ QUICK JOIN</button>
+        <button class="big-btn" onclick="doCreatePrivate()">🔒 CREATE PRIVATE LOBBY</button>
+        <label class="field-label" style="margin-top:12px">JOIN WITH CODE</label>
+        <div class="code-row">
+            <input class="code-input" id="code-input" maxlength="4" placeholder="XXXX"
+                oninput="this.value=this.value.replace(/[^A-Za-z0-9]/g,'').toUpperCase().slice(0,4)">
+            <button class="code-join-btn" onclick="doJoinByCode()">JOIN</button>
+        </div>
+        <div class="err" id="lobby-err"></div>
+    </div>
+</div>
+
+<!-- WAITING ROOM -->
+<div id="screen-waiting" class="screen">
+    <div class="panel">
+        <div class="panel-header">
+            <button class="back-btn" onclick="leaveWaiting()">← LEAVE</button>
+            <span class="panel-title">WAITING ROOM</span>
+        </div>
+        <div class="lobby-code-box">
+            <div class="lobby-code" id="waiting-code">????</div>
+            <div class="lobby-code-hint">SHARE THIS CODE WITH FRIENDS</div>
+        </div>
+        <div class="roster" id="roster-list"></div>
+        <div class="waiting-hint" id="waiting-hint">Waiting for host to start...</div>
+        <button class="start-btn" id="start-btn" disabled onclick="doStartGame()">▶ START GAME</button>
+    </div>
+</div>
+
+<!-- LOADING -->
+<div id="screen-loading" class="screen">
+    <div class="load-spin">🌀</div>
+    <div class="load-text">LOADING WORLD</div>
+    <div class="load-sub" id="load-sub">Connecting...</div>
+</div>
+
+<!-- BESTIARY -->
+<div id="screen-bestiary-splash" class="screen">
+    <div class="panel">
+        <div class="panel-header">
+            <button class="back-btn" onclick="showScreen('screen-landing')">← BACK</button>
+            <span class="panel-title">📖 BESTIARY</span>
+        </div>
+        <div class="bestiary-grid" id="bestiary-grid"></div>
+    </div>
+</div>
+
+<!-- GAME -->
 <div id="game-layout">
     <div id="canvas-wrap">
         <div id="skill-bar-bg"></div>
         <div id="ui-layer">
             <div id="shop-menu" class="menu">
-                <h1 style="color:#ffcc00">🛒 MERCHANT</h1>
-                <p style="margin-bottom:12px;font-size:12px;color:#888">Gold: <span id="shop-gold">0</span></p>
+                <h1 style="color:#ffcc00;margin-bottom:10px;font-size:18px">🛒 MERCHANT</h1>
+                <p style="margin-bottom:12px;font-size:11px;color:#666">Gold: <span id="shop-gold">0</span></p>
                 <div class="shop-grid">
                     <div class="shop-item"><h3>❤️ Potion</h3><p>Heal 5 HP</p><button class="buy-btn" onclick="buyItem('potion')">50g</button></div>
                     <div class="shop-item"><h3>⚔️ Sharpen</h3><p>+1 Base Damage</p><button class="buy-btn" onclick="buyItem('damage')">100g</button></div>
@@ -406,249 +325,237 @@
                 </div>
                 <button class="hud-btn" onclick="closeMenus()">LEAVE SHOP</button>
             </div>
-            <div id="skill-menu" class="menu">
-                <h1 style="color:#00ffcc">📚 TRAINER</h1>
-                <p style="margin-bottom:12px;color:#888;font-size:12px">Use the side panel → to upgrade skills</p>
-                <button class="hud-btn" onclick="closeMenus()">CLOSE</button>
-            </div>
-            <div id="stat-menu" class="menu">
-                <h1 style="color:#ff00ff">🪞 STAT MIRROR</h1>
-                <p style="margin-bottom:12px;color:#888;font-size:12px">Use the side panel → to allocate Stat Points</p>
-                <button class="hud-btn" onclick="closeMenus()">CLOSE</button>
-            </div>
         </div>
         <canvas id="gameCanvas"></canvas>
     </div>
 </div>
 
 <script>
-// ════════════════════════════════════════
-//  CLASS META
-// ════════════════════════════════════════
-const CLASS_META = {
-    fire:   { emoji:'🧙', name:'PYRO',  desc:'Glass cannon. High damage.',   element:'🔥 Fire',   startEl:'fire',
-              stats:{STR:3,DEX:2,CON:0,INT:4,WIS:1}, statMax:{STR:10,DEX:8,CON:5,INT:15,WIS:8},
-              skills:['🔥 Fire Burst','💨 Flame Dash','🛡️ Molten Guard','☄️ Inferno'] },
-    blood:  { emoji:'🧛', name:'BLOOD', desc:'Sustain fighter. Lifesteal.',  element:'💀 Necrotic', startEl:'blood',
-              stats:{STR:2,DEX:1,CON:4,INT:1,WIS:2}, statMax:{STR:8,DEX:6,CON:15,INT:5,WIS:8},
-              skills:['🩸 Blood Drain','🦇 Bat Swarm','❤️ Blood Pact','💉 Hemorrhage'] },
-    plague: { emoji:'🧟', name:'ROT',   desc:'DoT specialist. Slow + devastating.',element:'☠️ Poison', startEl:'plague',
-              stats:{STR:1,DEX:0,CON:2,INT:5,WIS:2}, statMax:{STR:6,DEX:5,CON:8,INT:15,WIS:10},
-              skills:['☠️ Poison Cloud','🕸️ Web Trap','🧟 Reanimate','🌑 Plague Nova'] },
-};
-
-let selectedClass = null;
-
-function showTab(id) {
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
-    const idx = ['tab-instructions','tab-select','tab-continue'].indexOf(id);
-    document.querySelectorAll('.tab-btn')[idx]?.classList.add('active');
+// ── Screen manager ──
+function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    document.getElementById(id)?.classList.add('active');
+}
+function toggleSection(btn) {
+    btn.classList.toggle('open');
+    btn.nextElementSibling.classList.toggle('open');
 }
 
-function buildClassGrid() {
-    const grid = document.getElementById('class-grid');
-    grid.innerHTML = '';
-    for (const [type, meta] of Object.entries(CLASS_META)) {
+// ── Class meta ──
+const CLASS_META = {
+    fire:   { emoji:'🧙', name:'PYRO',  desc:'Glass cannon',    startEl:'fire',
+              unlocks:{ 2:'🔥⚡🪨 Element Choice',4:'💧❄️🌪️ Element Choice',6:'🌑🌀💀 Element Choice',8:'Weapon Unlock',10:'Passive Perk',15:'Plasma Combo',20:'Signature Skill' } },
+    blood:  { emoji:'🧛', name:'BLOOD', desc:'Sustain / Lifesteal', startEl:'necrotic',
+              unlocks:{ 2:'💀🌑☠️ Element Choice',4:'🌀🪨🌪️ Element Choice',6:'🔥⚡❄️ Element Choice',8:'Weapon Unlock',10:'Passive Perk',15:'Leech Combo',20:'Signature Skill' } },
+    plague: { emoji:'🧟', name:'ROT',   desc:'DoT specialist',  startEl:'poison',
+              unlocks:{ 2:'☠️💀🌑 Element Choice',4:'🪨💧🌪️ Element Choice',6:'🌀❄️⚡ Element Choice',8:'Weapon Unlock',10:'Passive Perk',15:'Acid Combo',20:'Signature Skill' } },
+};
+let selectedClass = null;
+
+function buildClassCards() {
+    const c = document.getElementById('class-cards');
+    c.innerHTML = '';
+    for (const [type,meta] of Object.entries(CLASS_META)) {
         const card = document.createElement('div');
         card.className = 'class-card';
-        card.innerHTML = `
-            <span class="emoji">${meta.emoji}</span>
-            <span class="cname">${meta.name}</span>
-            <span class="cel">${meta.element}</span>
-            <span class="cdesc">${meta.desc}</span>`;
+        card.innerHTML = `<span class="emo">${meta.emoji}</span><span class="cn">${meta.name}</span><span class="cs">${meta.desc}</span>`;
         card.onclick = () => selectClass(type);
-        grid.appendChild(card);
+        c.appendChild(card);
     }
 }
 
 function selectClass(type) {
     selectedClass = type;
-    document.querySelectorAll('.class-card').forEach((c, i) => {
-        c.classList.toggle('selected', Object.keys(CLASS_META)[i] === type);
-    });
-
-    const meta = CLASS_META[type];
-    const preview = document.getElementById('class-stats-preview');
-    preview.classList.add('visible');
-    document.getElementById('preview-name').textContent = `${meta.emoji} ${meta.name}`;
-
-    document.getElementById('preview-stats').innerHTML = Object.entries(meta.stats).map(([k,v]) => `
-        <div class="stat-row">
-            <span class="stat-label">${k}</span>
-            <div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${(v/meta.statMax[k])*100}%"></div></div>
-            <span class="stat-val">${v}</span>
-        </div>`).join('');
-
-    document.getElementById('preview-skills').innerHTML =
-        '<strong style="color:#00ffcc;display:block;margin-bottom:4px">SKILLS</strong>' +
-        meta.skills.join(' &nbsp; ');
-
-    document.getElementById('preview-element').innerHTML =
-        `<span style="color:#888">Starting element: </span><span style="color:#ffcc00">${meta.element}</span>`;
-
-    // Show class profile if exists
-    const profKey = `spire_profile_${type}`;
-    const profRaw = localStorage.getItem(profKey);
-    const badge = document.getElementById('profile-badge');
-    if (profRaw) {
-        const prof = JSON.parse(profRaw);
-        badge.classList.add('visible');
-        badge.innerHTML = `
-            <span class="plvl">CLASS LV${prof.classLevel || 1}</span>
-            &nbsp;·&nbsp; ${prof.totalRuns || 0} runs
-            &nbsp;·&nbsp; Best tier: ${prof.bestWave || 0}
-            &nbsp;·&nbsp; Unlocked elements: ${(prof.unlockedElements || []).join(' ')}
-        `;
-    } else {
-        badge.classList.remove('visible');
-    }
-
-    const btn = document.getElementById('play-btn');
+    document.querySelectorAll('.class-card').forEach((c,i)=>c.classList.toggle('sel',Object.keys(CLASS_META)[i]===type));
+    const btn = document.getElementById('next-btn');
     btn.disabled = false;
-    btn.textContent = `▶ PLAY AS ${meta.name}`;
-}
+    document.getElementById('next-name').textContent = CLASS_META[type].name;
 
-function checkSave() {
-    const json = localStorage.getItem('spire_save');
-    if (!json) return;
-    const data = JSON.parse(json);
-    document.getElementById('continue-tab-btn').style.display = 'flex';
-    const el = CLASS_META[data.element] || CLASS_META.fire;
-    document.getElementById('save-summary').innerHTML = `
-        <div style="font-size:28px;margin-bottom:8px">${el.emoji}</div>
-        <div style="color:#ffcc00">${el.name} — Level ${data.level || 1}</div>
-        <div style="color:#888;font-size:11px">Gold: ${data.gold || 0} &nbsp; Stat Points: ${data.statPoints || 0}</div>
-        <div style="color:#888;font-size:11px">Active Elements: ${(data.activeElements || [el.startEl]).join(', ')}</div>
-    `;
-}
-
-function startNewGame() {
-    if (!selectedClass) return;
-    window._startClass = selectedClass;
-    window._continueGame = false;
-    const nameInput = document.getElementById('hero-name-input');
-    window._heroName = (nameInput?.value.trim() || 'HERO').toUpperCase().slice(0, 8);
-    document.getElementById('splash').style.display = 'none';
-    document.getElementById('game-layout').style.display = 'flex';
-    requestAnimationFrame(() => { resizeCanvas(); window._gameReady = true; });
-}
-
-function continueGame() {
-    window._continueGame = true;
-    document.getElementById('splash').style.display = 'none';
-    document.getElementById('game-layout').style.display = 'flex';
-    requestAnimationFrame(() => { resizeCanvas(); window._gameReady = true; });
-}
-
-function deleteSave() {
-    if (confirm('Delete save and start over?')) {
-        localStorage.removeItem('spire_save');
-        location.reload();
+    // Load class profile XP
+    const raw = localStorage.getItem(`spire_profile_${type}`);
+    const block = document.getElementById('profile-xp');
+    if (raw) {
+        const p = JSON.parse(raw);
+        const lv=p.classLevel||1, xp=p.classXp||0, next=p.classXpToNext||200;
+        block.classList.add('vis');
+        document.getElementById('plvl').textContent    = `CLASS LV${lv}`;
+        document.getElementById('pruns').textContent   = `${p.totalRuns||0} runs`;
+        document.getElementById('xp-fill').style.width = `${Math.min(100,(xp/next)*100)}%`;
+        document.getElementById('xp-label').textContent= `${xp} / ${next} XP to next level`;
+        const list = document.getElementById('unlock-list');
+        list.innerHTML = '';
+        for (const [lvReq,label] of Object.entries(CLASS_META[type].unlocks)) {
+            const n=parseInt(lvReq), done=lv>n, next2=!done&&lv===n;
+            const row = document.createElement('div');
+            row.className='ul-row';
+            row.innerHTML=`<div class="ul-dot ${done?'done':next2?'next':'lock'}"></div><span class="ul-lbl ${done?'done':next2?'next':''}">${done?'✓ ':''}LV${lvReq} — ${label}</span>`;
+            list.appendChild(row);
+        }
+    } else {
+        block.classList.remove('vis');
     }
 }
 
-// ════════════════════════════════════════
-//  PANEL
-// ════════════════════════════════════════
-let panelOpen = false;
-
-function resizeCanvas() {
-    const canvas = document.getElementById('gameCanvas');
-    const wrap = document.getElementById('canvas-wrap');
-    if (!canvas || !wrap) return;
-    canvas.width  = wrap.offsetWidth;
-    canvas.height = wrap.offsetHeight;
+// ── Player info helper ──
+function _info() {
+    const m = CLASS_META[selectedClass];
+    return { avatar:m.emoji, className:m.name, heroName:(document.getElementById('hero-name-input').value.trim()||'HERO').toUpperCase().slice(0,8), activeElements:[m.startEl] };
 }
 
-// ════════════════════════════════════════
-//  PANEL UPDATE (called from game.js)
-// ════════════════════════════════════════
+// ── Net module (lazy-imported) ──
+let _net = null;
+let _waitingShown = false;
+
+function _loadNet(action) {
+    _waitingShown = false;
+    import('./net.js').then(net => {
+        _net = net;
+        window._netModule = net;
+        net.setCallbacks({
+            rosterUpdate: r => _onRoster(r),
+            gameStart:    m => _onGameStart(m),
+            loading:      () => { document.getElementById('load-sub').textContent='Server loading world...'; },
+            error:        msg => { showScreen('screen-lobby'); document.getElementById('lobby-err').textContent=msg; },
+            hostTransferred: () => _updateHostUI(true),
+        });
+        action(net);
+    });
+}
+
+function _onRoster(roster) {
+    _renderRoster(roster);
+    if (!_waitingShown) {
+        _waitingShown = true;
+        document.getElementById('waiting-code').textContent = _net?.myLobbyCode || '????';
+        _updateHostUI(_net?.isHost || false);
+        showScreen('screen-waiting');
+    }
+}
+
+function _renderRoster(roster) {
+    const myId = _net?.myId;
+    const list = document.getElementById('roster-list');
+    list.innerHTML = '';
+    roster.forEach(p => {
+        const me = p.id===myId;
+        const row = document.createElement('div');
+        row.className = 'roster-row';
+        row.innerHTML = `<span class="r-avatar">${p.avatar||'🧙'}</span><div class="r-info"><div class="r-name">${p.heroName||'HERO'}</div><div class="r-class">${p.className||''}</div></div>${p.isHost?'<span class="r-badge host">HOST</span>':''}${me?'<span class="r-badge you">YOU</span>':''}`;
+        list.appendChild(row);
+    });
+}
+
+function _updateHostUI(amHost) {
+    const btn=document.getElementById('start-btn');
+    btn.disabled=!amHost;
+    document.getElementById('waiting-hint').textContent = amHost ? 'You are the host — start when ready.' : 'Waiting for host to start...';
+}
+
+function _onGameStart() {
+    showScreen('screen-loading');
+    document.getElementById('load-sub').textContent='World ready — entering...';
+    const check = setInterval(()=>{
+        if (_net?.serverInitialized) { clearInterval(check); _launchGame(); }
+    }, 100);
+    setTimeout(()=>{ clearInterval(check); _launchGame(); }, 6000);
+}
+
+function _launchGame() {
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    document.getElementById('game-layout').style.display='block';
+    _resizeCanvas();
+    window._gameReady = true;
+}
+
+function doQuickJoin() {
+    const i=_info(); window._startClass=selectedClass; window._heroName=i.heroName;
+    showScreen('screen-loading'); document.getElementById('load-sub').textContent='Finding a lobby...';
+    _loadNet(net=>net.quickJoin(i.avatar,i.className,i.heroName,i.activeElements));
+}
+function doCreatePrivate() {
+    const i=_info(); window._startClass=selectedClass; window._heroName=i.heroName;
+    showScreen('screen-loading'); document.getElementById('load-sub').textContent='Creating private lobby...';
+    _loadNet(net=>net.createLobby(i.avatar,i.className,i.heroName,i.activeElements,true));
+}
+function doJoinByCode() {
+    const code=document.getElementById('code-input').value.trim().toUpperCase();
+    if (code.length!==4){document.getElementById('lobby-err').textContent='Enter a 4-letter code.';return;}
+    const i=_info(); window._startClass=selectedClass; window._heroName=i.heroName;
+    document.getElementById('lobby-err').textContent='';
+    showScreen('screen-loading'); document.getElementById('load-sub').textContent=`Joining ${code}...`;
+    _loadNet(net=>net.joinLobbyByCode(code,i.avatar,i.className,i.heroName,i.activeElements));
+}
+function doStartGame() {
+    _net?.sendStartGame();
+    document.getElementById('start-btn').disabled=true;
+    document.getElementById('waiting-hint').textContent='Starting...';
+}
+function leaveWaiting() {
+    _net?.disconnectNet(); _net=null; window._netModule=null;
+    showScreen('screen-landing');
+}
+
+// ── Bestiary ──
+function showBestiarySplash() {
+    const types=['goblin','skeleton','troll','wraith','miniboss','boss'];
+    const EMOJIS={goblin:'👺',skeleton:'💀',troll:'👾',wraith:'👻',miniboss:'🐲',boss:'👹'};
+    const NAMES={goblin:'GOBLIN',skeleton:'SKELETON',troll:'TROLL',wraith:'WRAITH',miniboss:'MINI-BOSS',boss:'BOSS'};
+    const ELS={fire:'🔥',water:'💧',ice:'❄️',lightning:'⚡',poison:'☠️',earth:'🪨',dark:'🌑',light:'✨',holy:'💫',necrotic:'💀',void:'🌀',wind:'🌪️'};
+    let raw={}; try{raw=JSON.parse(localStorage.getItem('spire_bestiary')||'{}');}catch{}
+    const grid=document.getElementById('bestiary-grid');
+    grid.innerHTML='';
+    types.forEach(type=>{
+        const entry=raw[type], row=document.createElement('div');
+        row.className='b-row';
+        let h=`<div class="b-emoji">${EMOJIS[type]}</div><div class="b-info"><div class="b-name">${NAMES[type]}</div>`;
+        if (!entry) { h+=`<div class="b-unknown">No data — use different elements against this enemy.</div>`; }
+        else {
+            if (entry.knownElement) h+=`<div style="color:#555;font-size:9px;margin-bottom:3px">${ELS[entry.knownElement]||''} ${entry.knownElement.toUpperCase()}</div>`;
+            const revs=Object.entries(entry.revealed||{});
+            if (revs.length) {
+                h+='<div class="b-badges">';
+                revs.forEach(([el,d])=>{ h+=`<span class="b-badge ${d.multiplier>=1.5?'str':'wk'}">${ELS[el]||el} ${d.multiplier>=1.5?'▲':'▼'} ${d.multiplier.toFixed(1)}x</span>`; });
+                h+='</div>';
+            } else { h+=`<div class="b-unknown">Keep testing elements...</div>`; }
+        }
+        h+='</div>'; row.innerHTML=h; grid.appendChild(row);
+    });
+    showScreen('screen-bestiary-splash');
+}
+
+// ── Canvas / game bridge ──
+function _resizeCanvas() {
+    const cv=document.getElementById('gameCanvas'), w=document.getElementById('canvas-wrap');
+    if (cv&&w) { cv.width=w.offsetWidth; cv.height=w.offsetHeight; }
+}
+window.addEventListener('resize', _resizeCanvas);
+
 window.updatePanel = function(player) {
-    if (!player) return;
-
-    const _set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
-    const _txt = (id, txt)  => { const el = document.getElementById(id); if (el) el.textContent = txt; };
-
-    _set('panel-char-info', `
-        <div style="font-size:22px">${player.avatar}</div>
-        <div style="color:#ffcc00">${player.className} &nbsp; LV${player.level}</div>
-        <div style="color:#666;font-size:10px">XP ${player.xp} / ${player.xpToNext}</div>
-        <div style="color:#666;font-size:10px">💰 ${player.gold}</div>
-    `);
-
-    // Elements
-    const elDiv = document.getElementById('panel-elements');
-    if (elDiv && player.activeElements) {
-        const ELEMENTS = { fire:'🔥',water:'💧',ice:'❄️',lightning:'⚡',poison:'☠️',earth:'🪨',dark:'🌑',light:'✨',holy:'💫',necrotic:'💀',void:'🌀',wind:'🌪️' };
-        elDiv.innerHTML = player.activeElements.map(el =>
-            `<span style="margin-right:8px">${ELEMENTS[el]||''}  ${el.toUpperCase()}</span>`
-        ).join('');
-        if (player.activeCombo) elDiv.innerHTML += `<div style="color:#ff8800;font-size:10px;margin-top:4px">⚡ COMBO ACTIVE</div>`;
-        if (player.overload)    elDiv.innerHTML += `<div style="color:#ffcc00;font-size:10px">🔥 OVERLOAD ACTIVE</div>`;
-    }
-
-    // Stats
-    _txt('panel-stat-points', player.statPoints > 0 ? `(${player.statPoints} pts)` : '');
-
-    const statColors = { str:'#ff6644', dex:'#ffcc00', con:'#ff4488', int:'#aa44ff', wis:'#44aaff' };
-    _set('panel-stats-rows',
-        Object.entries(player.stats).map(([k, v]) => {
-            const max = player.statMax[k] || 10;
-            const canUp = player.statPoints > 0 && v < max;
-            return `
-            <div class="panel-stat-row">
-                <span class="panel-stat-label">${k.toUpperCase()}</span>
-                <div class="panel-stat-bar">
-                    <div class="panel-stat-fill" style="width:${(v/max)*100}%;background:${statColors[k]}"></div>
-                </div>
-                <span class="panel-stat-val">${v}</span>
-                <button class="panel-plus-btn" ${canUp?'':'disabled'} onclick="window.panelUpgradeStat('${k}')">+</button>
-            </div>`;
-        }).join('')
-    );
-
-    // Skills
-    _txt('panel-skill-tokens', player.skillTokens > 0 ? `(${player.skillTokens} tokens)` : '');
-
-    _set('panel-skills-rows',
-        Object.entries(player.skills).map(([key, skill]) => {
-            const unlocked = skill.tier > 0;
-            const maxed = skill.tier >= skill.maxTier;
-            const canUp = player.skillTokens > 0 && !maxed;
-            const pips = Array.from({length: skill.maxTier}, (_, i) =>
-                `<div class="pip ${i < skill.tier ? 'filled' : ''}"></div>`).join('');
-            return `
-            <div class="skill-panel-row ${unlocked?'unlocked':''} ${maxed?'maxed':''}">
-                <div class="skill-panel-header">
-                    <span class="skill-icon">${skill.icon}</span>
-                    <span class="skill-name">${skill.name}</span>
-                    <span class="skill-tier-label">${maxed?'MAX':unlocked?`T${skill.tier}`:'🔒'}</span>
-                </div>
-                <div class="skill-desc">${skill.description}</div>
-                <div class="tier-pips">${pips}</div>
-                <button class="skill-upgrade-btn" ${canUp?'':'disabled'}
-                    onclick="window.panelUpgradeSkill('${key}')">
-                    ${maxed ? '★ MAXED' : canUp ? '▲ UPGRADE' : '—'}
-                </button>
-            </div>`;
-        }).join('')
-    );
+    const sg=document.getElementById('shop-gold'); if(sg) sg.textContent=player?.gold||0;
+};
+window.closeMenus = function() {
+    document.getElementById('shop-menu').style.display='none';
+};
+window.buyItem = function(type) {
+    const p=window._player; if(!p) return;
+    const costs={potion:50,damage:100,firerate:80,maxhp:120,reset:150};
+    const cost=costs[type]; if(!cost||p.gold<cost){window.triggerTicker?.('NOT ENOUGH GOLD');return;}
+    p.gold-=cost;
+    if(type==='potion')   p.hp=Math.min(p.hp+5,p.maxHp);
+    if(type==='damage')   p.weapons[0].baseDamage++;
+    if(type==='firerate') p.weapons[0].baseFireRate=Math.max(200,p.weapons[0].baseFireRate-80);
+    if(type==='maxhp')    p.baseHp+=5;
+    if(type==='reset')    Object.values(p.skills||{}).forEach(s=>s.cooldown=0);
+    p.saveProfile?.();
+    window.triggerTicker?.(`✓ ${type.toUpperCase()} BOUGHT`);
 };
 
-// ════════════════════════════════════════
-//  INIT
-// ════════════════════════════════════════
-buildClassGrid();
-checkSave();
-window.addEventListener('resize', resizeCanvas);
+// ── Init ──
+buildClassCards();
 </script>
 
-<!-- Debug console (remove for production) -->
 <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
 <script>eruda.init();</script>
-
 <script type="module" src="game.js"></script>
 </body>
 </html>
