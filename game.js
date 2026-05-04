@@ -16,7 +16,7 @@ import {
 import { MapSystem, CorruptionSystem, GemSystem, drawMap, drawPurgeStones, drawGems, drawCorruption, drawCorruptionHUD, drawPurgeStoneHUD, drawMinimap, MAP_SIZE } from "./map.js";
 import {
     drawHUD, drawTicker, drawOverlayMessage,
-    drawSkillBar, drawPortal, drawQuitButton,
+    drawSkillBar, drawQuitButton,
     drawBossBar, drawWaveCounter, drawHubZones,
     drawPoisonZones, drawZombies, drawPlayerTag,
     drawEnemyBars, drawEnemies, drawDeathScreen,
@@ -395,20 +395,8 @@ function update(time) {
             }
         });
 
-        // Portal proximity
-        if (portal) {
-            sendReady(Math.hypot(player.x - portal.x, player.y - portal.y) < 100);
-        }
-
-        // Hazard collision
-        let blocked = false;
-        hazards.forEach(h => {
-            if (nextX+pRadius > h.x && nextX-pRadius < h.x+50 &&
-                nextY+pRadius > h.y && nextY-pRadius < h.y+50) {
-                if (h.type === 'BARRIER') blocked = true;
-                else if (h.type === 'TRAP') player.hp -= 0.05;
-            }
-        });
+        // Terrain collision (solid chunks from procedural map)
+        const blocked = worldMap ? MapSystem.checkCollision(nextX, nextY, pRadius, worldMap.terrain) : false;
         if (!blocked) { player.x = nextX; player.y = nextY; }
 
         // Enemy contact damage
@@ -533,7 +521,7 @@ function draw() {
     });
 
     // Portal
-    drawPortal(ctx, portal);
+    // (portals replaced by purge stones)
 
     // Remote players
     Object.entries(remotePlayers).forEach(([id, p]) => {
